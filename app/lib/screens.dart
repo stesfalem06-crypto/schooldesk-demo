@@ -5,6 +5,8 @@ import 'package:qr_flutter/qr_flutter.dart';
 import 'api.dart';
 import 'app_state.dart';
 import 'edition.dart';
+import 'grades.dart';
+import 'timetable_page.dart';
 import 'office.dart';
 import 'shell.dart';
 import 'theme.dart';
@@ -155,8 +157,9 @@ class _LoginScreenState extends State<LoginScreen> {
             const SizedBox(height: 8),
             _DemoRole(label: 'Admin', username: 'admin', password: 'admin1850', busy: busy, onDone: (msg) => setState(() { busy = false; problem = msg; }), onStart: () => setState(() { busy = true; problem = null; })),
             _DemoRole(label: 'Director', username: 'director', password: 'director1850', busy: busy, onDone: (msg) => setState(() { busy = false; problem = msg; }), onStart: () => setState(() { busy = true; problem = null; })),
-            _DemoRole(label: 'Homeroom teacher', username: 'hanna', password: 'hanna1850', busy: busy, onDone: (msg) => setState(() { busy = false; problem = msg; }), onStart: () => setState(() { busy = true; problem = null; })),
+            _DemoRole(label: 'Homeroom teacher', username: 'dawit', password: 'dawit1850', busy: busy, onDone: (msg) => setState(() { busy = false; problem = msg; }), onStart: () => setState(() { busy = true; problem = null; })),
             _DemoRole(label: 'Subject teacher', username: 'meron', password: 'meron1850', busy: busy, onDone: (msg) => setState(() { busy = false; problem = msg; }), onStart: () => setState(() { busy = true; problem = null; })),
+            _DemoRole(label: 'Class and subject', username: 'samuel', password: 'samuel1850', busy: busy, onDone: (msg) => setState(() { busy = false; problem = msg; }), onStart: () => setState(() { busy = true; problem = null; })),
           ],
         ],
       ),
@@ -202,29 +205,32 @@ class HomeScreen extends StatelessWidget {
     void add(IconData icon, String label, Color color, Widget page) {
       tiles.add(BigTile(icon: icon, label: label, color: color, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => page))));
     }
-    if (model.role == 'teacher' || model.seesSchool) {
-      add(Icons.edit, 'Marks', leaf, const MarksScreen());
-      add(Icons.leaderboard, 'Results', passGreen, const ResultsScreen());
-      add(Icons.calendar_month, 'Timetable', const Color(0xFF2C6BED), const TimetableScreen());
-    }
-    if (model.isHomeroom || model.isAdmin) {
-      add(Icons.groups, 'My class', const Color(0xFF6A4C93), const StudentsScreen());
-      add(Icons.payments, 'Fees', const Color(0xFFE8A317), const FeesScreen());
-    }
     if (model.seesSchool) {
       add(Icons.dashboard, 'School', leaf, const DashboardScreen());
-      add(Icons.account_balance_wallet, 'Money', const Color(0xFFE8A317), const MoneyScreen());
-      add(Icons.badge, 'Staff', const Color(0xFF2C6BED), const StaffScreen());
+      add(Icons.payments, 'Fees', const Color(0xFFE8A317), const FeesScreen());
+      add(Icons.leaderboard, 'Results', passGreen, const ResultsScreen());
       add(Icons.event_busy, 'Absence', failRed, const AbsenceScreen());
-    }
-    if (model.isAdmin) {
-      add(Icons.tune, 'Settings', ink, const SettingsScreen());
-      add(Icons.backup, 'Backup', leafDark, const BackupScreen());
-      add(Icons.person_add, 'Logins', const Color(0xFF6A4C93), const UsersScreen());
-    }
-    if (model.isDirector) {
-      add(Icons.groups_2, 'Meetings', const Color(0xFF6A4C93), const MeetingsScreen());
-      add(Icons.description, 'Report', leaf, const ReportScreen());
+      add(Icons.calendar_month, 'Week', const Color(0xFF2C6BED), const TimetableScreen());
+      add(Icons.badge, 'Staff', const Color(0xFF6A4C93), const StaffScreen());
+      add(Icons.account_balance_wallet, 'Money', leafDark, const MoneyScreen());
+      if (model.isAdmin) {
+        add(Icons.tune, 'Settings', ink, const SettingsScreen());
+        add(Icons.backup, 'Backup', const Color(0xFF2C6BED), const BackupScreen());
+        add(Icons.person_add, 'Logins', const Color(0xFF6A4C93), const UsersScreen());
+      }
+      if (model.isDirector) {
+        add(Icons.groups_2, 'Meetings', const Color(0xFF6A4C93), const MeetingsScreen());
+        add(Icons.description, 'Report', leaf, const ReportScreen());
+      }
+    } else if (model.isHomeroom) {
+      add(Icons.groups, 'My class', const Color(0xFF6A4C93), const StudentsScreen());
+      add(Icons.edit, 'Marks', leaf, const MarksScreen());
+      add(Icons.payments, 'Fees', const Color(0xFFE8A317), const FeesScreen());
+      add(Icons.leaderboard, 'Results', passGreen, const ResultsScreen());
+      add(Icons.calendar_month, 'Week', const Color(0xFF2C6BED), const TimetableScreen());
+    } else {
+      add(Icons.edit, 'Marks', leaf, const MarksScreen());
+      add(Icons.calendar_month, 'Week', const Color(0xFF2C6BED), const TimetableScreen());
     }
     return SchoolScaffold(
       title: model.user['display_name']?.toString() ?? 'Home',
@@ -351,11 +357,14 @@ class _AssessmentsScreenState extends State<AssessmentsScreen> {
               : ListView(
                   padding: const EdgeInsets.all(16),
                   children: [
-                    Row(children: [
-                      Expanded(child: FilledButton(onPressed: () => add(1), child: const Text('First half'))),
-                      const SizedBox(width: 8),
-                      Expanded(child: FilledButton(onPressed: () => add(2), child: const Text('Second half'))),
-                    ]),
+                    if (widget.subject['can_edit'] == true)
+                      Row(children: [
+                        Expanded(child: FilledButton(onPressed: () => add(1), child: const Text('First half'))),
+                        const SizedBox(width: 8),
+                        Expanded(child: FilledButton(onPressed: () => add(2), child: const Text('Second half'))),
+                      ])
+                    else
+                      const Padding(padding: EdgeInsets.only(bottom: 8), child: Text('You can look. Only the subject teacher changes these marks.', style: TextStyle(fontSize: 16))),
                     const SizedBox(height: 8),
                     for (final a in items)
                       Card(
@@ -435,6 +444,7 @@ class _ScoreScreenState extends State<ScoreScreen> {
       title: widget.assessment['title']?.toString() ?? 'Marks',
       school: model.school,
       actions: [
+        if (widget.subject['can_edit'] == true)
         IconButton(
           tooltip: 'Undo',
           onPressed: () async {
@@ -471,7 +481,7 @@ class _ScoreScreenState extends State<ScoreScreen> {
                               scores[s['id'].toString()]?['score']?.toString() ?? '—',
                               style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800, color: scores[s['id'].toString()]?['score'] == null ? ink : passGreen),
                             ),
-                            onTap: () => enter(s),
+                            onTap: widget.subject['can_edit'] == true ? () => enter(s) : () => toast(context, 'Only the subject teacher can change this mark.'),
                           ),
                         ),
                   ],
@@ -497,9 +507,10 @@ class _ResultsScreenState extends State<ResultsScreen> {
 
   Future<void> loadClasses() async {
     try {
-      classes = asMaps(await context.read<AppModel>().ask((api) => api.get('/api/v1/classes')));
+      final model = context.read<AppModel>();
+      classes = asMaps(await model.ask((api) => api.get('/api/v1/classes')));
       error = null;
-      if (classes.length == 1) await open(classes.first);
+      if (!model.seesSchool && classes.length == 1) await open(classes.first);
     } on ApiException catch (e) {
       error = e.message;
     }
@@ -520,6 +531,10 @@ class _ResultsScreenState extends State<ResultsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final schoolWide = context.watch<AppModel>().seesSchool;
+    if (schoolWide && picked == null) {
+      return GradeSummary(title: 'Results', kind: 'results', onOpenClass: (cls) => open(cls));
+    }
     final students = asMaps(picked?['students']);
     return SchoolScaffold(
       title: 'Results',
@@ -531,6 +546,7 @@ class _ResultsScreenState extends State<ResultsScreen> {
               : ListView(
                   padding: const EdgeInsets.all(16),
                   children: [
+                    if (picked != null) TextButton(onPressed: () => setState(() => picked = null), child: const Text('All classes')),
                     if (picked == null)
                       for (final c in classes)
                         Card(child: ListTile(title: Text(c['name'].toString(), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800)), onTap: () => open(c))),
@@ -621,9 +637,31 @@ class _StudentsScreenState extends State<StudentsScreen> {
   }
 
   Future<void> drop(Map<String, dynamic> student, bool left) async {
-    final ok = await confirm(context, left ? 'Mark as left?' : 'Bring back?', student['full_name'].toString(), danger: left);
+    final ok = await confirm(context, left ? 'Mark as left?' : 'Bring this student back?', student['full_name'].toString(), danger: left);
     if (!ok || !context.mounted) return;
-    await context.read<AppModel>().ask((api) => api.post('/api/v1/students/${student['id']}/dropout', {'dropped': left, 'reason': left ? 'Left school' : '', 'date': '2026-11-13'}));
+    var reason = '';
+    if (left) {
+      final typed = await showDialog<String>(
+        context: context,
+        builder: (context) {
+          final box = TextEditingController();
+          return AlertDialog(
+            title: const Text('Why did they leave?'),
+            content: TextField(controller: box, decoration: const InputDecoration(labelText: 'Reason (you can leave this blank)')),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+              FilledButton(onPressed: () => Navigator.pop(context, box.text), child: const Text('Save')),
+            ],
+          );
+        },
+      );
+      if (typed == null || !context.mounted) return;
+      reason = typed.trim();
+    }
+    final today = DateTime.now();
+    final date = '${today.year.toString().padLeft(4, '0')}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
+    await context.read<AppModel>().ask((api) => api.post('/api/v1/students/${student['id']}/dropout', {'dropped': left, 'reason': reason, 'date': date}));
+    if (context.mounted) saved(context, left ? 'Marked as left' : 'Brought back');
     await load();
   }
 }
@@ -652,6 +690,9 @@ class _FeesScreenState extends State<FeesScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (context.watch<AppModel>().seesSchool) {
+      return const GradeSummary(title: 'Fees', kind: 'fees');
+    }
     return SchoolScaffold(
       title: 'Fees',
       school: context.watch<AppModel>().school,
@@ -671,7 +712,10 @@ class _FeesScreenState extends State<FeesScreen> {
                             final amount = await askNumber(context, 'Amount paid', hint: r['full_name'].toString());
                             if (amount == null || !context.mounted) return;
                             try {
-                              await context.read<AppModel>().ask((api) => api.post('/api/v1/fees', {'student_id': r['student_id'], 'amount': amount, 'paid_on': '2026-11-13'}));
+                              final today = DateTime.now();
+                              final date = '${today.year.toString().padLeft(4, '0')}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
+                              await context.read<AppModel>().ask((api) => api.post('/api/v1/fees', {'student_id': r['student_id'], 'amount': amount, 'paid_on': date}));
+                              if (context.mounted) saved(context, 'Payment saved');
                               await load();
                             } on ApiException catch (e) {
                               if (context.mounted) toast(context, e.message);

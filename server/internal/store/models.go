@@ -18,16 +18,16 @@ func (u User) IsDirector() bool { return u.Role == "director" }
 func (u User) SeesSchool() bool { return u.Role == "admin" || u.Role == "director" }
 
 type Settings struct {
-	AcademicYear string             `json:"academic_year"`
-	Semester     int                `json:"semester"`
-	SemesterEnd  string             `json:"semester_end"`
-	YearlyFee    float64            `json:"yearly_fee"`
-	UtilityFee   float64            `json:"utility_fee"`
-	CALocked     bool               `json:"ca_locked"`
-	Weights      domain.Weights     `json:"weights"`
-	FailLimits   domain.FailLimits  `json:"fail_limits"`
-	BackupDir    string             `json:"backup_dir"`
-	SampleData   bool               `json:"sample_data"`
+	AcademicYear string            `json:"academic_year"`
+	Semester     int               `json:"semester"`
+	SemesterEnd  string            `json:"semester_end"`
+	YearlyFee    float64           `json:"yearly_fee"`
+	UtilityFee   float64           `json:"utility_fee"`
+	CALocked     bool              `json:"ca_locked"`
+	Weights      domain.Weights    `json:"weights"`
+	FailLimits   domain.FailLimits `json:"fail_limits"`
+	BackupDir    string            `json:"backup_dir"`
+	SampleData   bool              `json:"sample_data"`
 }
 
 type Staff struct {
@@ -72,6 +72,7 @@ type ClassSubject struct {
 	PeriodsPerWeek int            `json:"periods_per_week"`
 	Semester       int            `json:"semester"`
 	Weights        domain.Weights `json:"weights"`
+	CanEdit        bool           `json:"can_edit"`
 }
 
 type Student struct {
@@ -93,14 +94,14 @@ type CustomField struct {
 }
 
 type Assessment struct {
-	ID             string   `json:"id"`
-	ClassSubjectID string   `json:"class_subject_id"`
-	Component      string   `json:"component"`
-	Half           int      `json:"half"`
-	Title          string   `json:"title"`
-	MaxMarks       float64  `json:"max_marks"`
-	AssessmentDate string   `json:"assessment_date"`
-	Revision       int      `json:"revision"`
+	ID             string  `json:"id"`
+	ClassSubjectID string  `json:"class_subject_id"`
+	Component      string  `json:"component"`
+	Half           int     `json:"half"`
+	Title          string  `json:"title"`
+	MaxMarks       float64 `json:"max_marks"`
+	AssessmentDate string  `json:"assessment_date"`
+	Revision       int     `json:"revision"`
 }
 
 type Score struct {
@@ -113,8 +114,8 @@ type Score struct {
 }
 
 type SubjectColumn struct {
-	ClassSubject ClassSubject           `json:"class_subject"`
-	Result       domain.SubjectResult   `json:"result"`
+	ClassSubject ClassSubject         `json:"class_subject"`
+	Result       domain.SubjectResult `json:"result"`
 }
 
 type StudentResult struct {
@@ -276,17 +277,17 @@ type SavedReport struct {
 }
 
 type PromotionStat struct {
-	ClassID   string  `json:"class_id"`
-	ClassName string  `json:"class_name"`
-	Level     string  `json:"level"`
-	Head      Headcount `json:"head"`
-	Promoted  int     `json:"promoted"`
-	PromotedM int     `json:"promoted_male"`
-	PromotedF int     `json:"promoted_female"`
-	Failed    int     `json:"failed"`
-	FailedM   int     `json:"failed_male"`
-	FailedF   int     `json:"failed_female"`
-	PromotedPct  float64 `json:"promoted_pct"`
-	FailedPct    float64 `json:"failed_pct"`
-	DropoutPct   float64 `json:"dropout_pct"`
+	ClassID     string    `json:"class_id"`
+	ClassName   string    `json:"class_name"`
+	Level       string    `json:"level"`
+	Head        Headcount `json:"head"`
+	Promoted    int       `json:"promoted"`
+	PromotedM   int       `json:"promoted_male"`
+	PromotedF   int       `json:"promoted_female"`
+	Failed      int       `json:"failed"`
+	FailedM     int       `json:"failed_male"`
+	FailedF     int       `json:"failed_female"`
+	PromotedPct float64   `json:"promoted_pct"`
+	FailedPct   float64   `json:"failed_pct"`
+	DropoutPct  float64   `json:"dropout_pct"`
 }

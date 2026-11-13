@@ -33,6 +33,42 @@ func (s *Store) AddAbsence(staffID, date, note string) error {
 	return err
 }
 
+type AbsenceDay struct {
+	ID         string `json:"id"`
+	StaffID    string `json:"staff_id"`
+	StaffName  string `json:"staff_name"`
+	EmployeeID string `json:"employee_id"`
+	Date       string `json:"date"`
+	Note       string `json:"note"`
+}
+
+func (s *Store) ListAbsences(year int, month int) ([]AbsenceDay, error) {
+	if month < 1 || month > 12 || year < 2000 {
+		return nil, errStr("that month is not valid")
+	}
+	start := time.Date(year, time.Month(month), 1, 0, 0, 0, 0, time.UTC)
+	end := start.AddDate(0, 1, 0)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	rows, err := s.db.Query(`SELECT a.id, a.staff_id, st.full_name, st.employee_id, a.absent_on, a.note
+		FROM absences a JOIN staff st ON st.id = a.staff_id
+		WHERE a.absent_on >= ? AND a.absent_on < ?
+		ORDER BY st.full_name, a.absent_on`, start.Format("2006-01-02"), end.Format("2006-01-02"))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []AbsenceDay{}
+	for rows.Next() {
+		var d AbsenceDay
+		if err := rows.Scan(&d.ID, &d.StaffID, &d.StaffName, &d.EmployeeID, &d.Date, &d.Note); err != nil {
+			return nil, err
+		}
+		out = append(out, d)
+	}
+	return out, rows.Err()
+}
+
 func (s *Store) DeleteAbsence(id string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()

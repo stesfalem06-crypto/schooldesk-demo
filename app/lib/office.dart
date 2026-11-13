@@ -198,75 +198,160 @@ class AbsenceScreen extends StatefulWidget {
 
 class _AbsenceScreenState extends State<AbsenceScreen> {
   List<Map<String, dynamic>> people = [];
+  List<Map<String, dynamic>> marks = [];
   Map<String, dynamic>? report;
   String? staffId;
+  String query = '';
+  String filter = 'all';
+  late DateTime month = DateTime(DateTime.now().year, DateTime.now().month);
 
   @override
   void initState() { super.initState(); loadPeople(); }
 
   Future<void> loadPeople() async {
     people = asMaps(await context.read<AppModel>().ask((api) => api.get('/api/v1/staff')));
-    people = people.where((p) => p['staff_type'] == 'teaching').toList();
-    if (people.isNotEmpty) {
-      staffId = people.first['id'].toString();
-      await loadReport();
+    if (staffId == null && people.isNotEmpty) staffId = people.first['id'].toString();
+    await loadMonth();
+  }
+
+  Future<void> loadMonth() async {
+    final model = context.read<AppModel>();
+    marks = asMaps(await model.ask((api) => api.get('/api/v1/absences?year=${month.year}&month=${month.month}')));
+    if (staffId != null) {
+      final raw = await model.ask((api) => api.get('/api/v1/staff/$staffId/absence?year=${month.year}&month=${month.month}'));
+      report = (raw as Map).map((k, v) => MapEntry(k.toString(), v));
     }
     if (context.mounted) setState(() {});
   }
 
-  Future<void> loadReport() async {
-    if (staffId == null) return;
-    final raw = await context.read<AppModel>().ask((api) => api.get('/api/v1/staff/$staffId/absence'));
-    report = (raw as Map).map((k, v) => MapEntry(k.toString(), v));
-    if (context.mounted) setState(() {});
+  List<Map<String, dynamic>> get visible {
+    final q = query.trim().toLowerCase();
+    return people.where((p) {
+      if (filter == 'teaching' && p['staff_type'] != 'teaching') return false;
+      if (filter == 'office' && p['staff_type'] == 'teaching') return false;
+      if (q.isEmpty) return true;
+      final name = p['full_name'].toString().toLowerCase();
+      final id = p['employee_id'].toString().toLowerCase();
+      return name.contains(q) || id.contains(q);
+    }).toList();
   }
 
   @override
   Widget build(BuildContext context) {
     final r = report ?? {};
     final admin = context.watch<AppModel>().isAdmin;
+    final selected = people.where((p) => p['id'].toString() == staffId).toList();
     return SchoolScaffold(
       title: 'Absence',
       school: context.watch<AppModel>().school,
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          DropdownButton<String>(
-            isExpanded: true,
-            value: staffId,
-            items: [for (final p in people) DropdownMenuItem(value: p['id'].toString(), child: Text(p['full_name'].toString(), style: const TextStyle(fontSize: 18)))],
-            onChanged: (v) async { staffId = v; await loadReport(); },
+          TextField(
+            decoration: const InputDecoration(labelText: 'Search name or staff number'),
+            onChanged: (v) => setState(() => query = v),
           ),
           const SizedBox(height: 8),
-          Text('Days away ${r['absent_days'] ?? '—'}', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
-          Text('Per week ${r['absenteeism_per_week'] ?? '—'}'),
-          Text('Periods lost ${r['lost_periods'] ?? '—'}   per week ${r['lost_per_week'] ?? '—'}'),
-          Text('Make-up classes ${r['makeup_classes'] ?? '—'}'),
-          Text('${r['percent_lost'] ?? '—'}% of periods lost', style: const TextStyle(fontSize: 20, color: failRed, fontWeight: FontWeight.w800)),
-          if (admin) ...[
-            const SizedBox(height: 8),
-            FilledButton(onPressed: () => mark(false), child: const Text('Mark away today')),
-            FilledButton(onPressed: () => mark(true), child: const Text('Add a make-up class')),
-          ],
+          Wrap(spacing: 8, children: [
+            ChoiceChip(label: const Text('All'), selected: filter == 'all', onSelected: (_) => setState(() => filter = 'all')),
+            ChoiceChip(label: const Text('Teachers'), selected: filter == 'teaching', onSelected: (_) => setState(() => filter = 'teaching')),
+            ChoiceChip(label: const Text('Office'), selected: filter == 'office', onSelected: (_) => setState(() => filter = 'office')),
+          ]),
+          const SizedBox(height: 8),
+          for (final p in visible)
+            Card(
+              color: p['id'].toString() == staffId ? const Color(0xFFD9E8E4) : card,
+              child: ListTile(
+                title: Text(p['full_name'].toString(), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+                subtitle: Text('${p['employee_id'] ?? ''} · ${p['staff_type'] == 'teaching' ? 'Teacher' : 'Office'} · ${_count(p['id'].toString())} days away'),
+                onTap: () async { staffId = p['id'].toString(); await loadMonth(); },
+              ),
+            ),
+          if (visible.isEmpty) const EmptyNote('No one matches that search.'),
+          const SizedBox(height: 12),
+          Text(selected.isEmpty ? 'Choose a person' : selected.first['full_name'].toString(), style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
+          Row(children: [
+            IconButton(onPressed: () async { month = DateTime(month.year, month.month - 1); await loadMonth(); }, icon: const Icon(Icons.chevron_left, size: 36)),
+            Expanded(child: Text(_monthLabel(), textAlign: TextAlign.center, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700))),
+            IconButton(onPressed: () async { month = DateTime(month.year, month.month + 1); await loadMonth(); }, icon: const Icon(Icons.chevron_right, size: 36)),
+          ]),
+          _calendar(admin),
+          const SizedBox(height: 8),
+          Text('Days away ${r['absent_days'] ?? '—'}', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+          Text('Periods lost ${r['lost_periods'] ?? '—'} · Make-up ${r['makeup_periods'] ?? '—'}', style: const TextStyle(fontSize: 16)),
+          Text('${r['percent_lost'] ?? '—'}% of periods lost', style: const TextStyle(fontSize: 18, color: failRed, fontWeight: FontWeight.w800)),
+          if (admin && staffId != null)
+            FilledButton(onPressed: makeup, child: const Text('Add make-up periods')),
         ],
       ),
     );
   }
 
-  Future<void> mark(bool makeup) async {
-    if (staffId == null) return;
+  int _count(String id) => marks.where((m) => m['staff_id'].toString() == id).length;
+
+  String _monthLabel() {
+    const names = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+    return '${names[month.month - 1]} ${month.year}';
+  }
+
+  Widget _calendar(bool admin) {
+    final first = DateTime(month.year, month.month, 1);
+    final days = DateTime(month.year, month.month + 1, 0).day;
+    final lead = first.weekday - 1;
+    final cells = <Widget>[];
+    for (final name in ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su']) {
+      cells.add(Center(child: Text(name, style: const TextStyle(fontWeight: FontWeight.w800))));
+    }
+    for (var i = 0; i < lead; i++) {
+      cells.add(const SizedBox.shrink());
+    }
+    for (var d = 1; d <= days; d++) {
+      final date = '${month.year.toString().padLeft(4, '0')}-${month.month.toString().padLeft(2, '0')}-${d.toString().padLeft(2, '0')}';
+      final away = marks.where((m) => m['staff_id'].toString() == staffId && m['date'].toString() == date).toList();
+      cells.add(Padding(
+        padding: const EdgeInsets.all(2),
+        child: Material(
+          color: away.isNotEmpty ? failRed : card,
+          borderRadius: BorderRadius.circular(10),
+          child: InkWell(
+            onTap: !admin || staffId == null ? null : () => toggle(date, away),
+            child: Center(child: Text('$d', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: away.isNotEmpty ? Colors.white : ink))),
+          ),
+        ),
+      ));
+    }
+    return GridView.count(crossAxisCount: 7, shrinkWrap: true, physics: const NeverScrollableScrollPhysics(), childAspectRatio: 1.1, children: cells);
+  }
+
+  Future<void> toggle(String date, List<Map<String, dynamic>> away) async {
     final model = context.read<AppModel>();
     try {
-      if (makeup) {
-        final n = await askNumber(context, 'How many periods?');
-        if (n == null) return;
-        await model.ask((api) => api.post('/api/v1/makeups', {'staff_id': staffId, 'date': _today(), 'periods': n.round(), 'note': ''}));
+      if (away.isNotEmpty) {
+        final ok = await confirm(context, 'Mark as present?', date);
+        if (!ok || !mounted) return;
+        await model.ask((api) => api.delete('/api/v1/absences/${away.first['id']}'));
+        if (mounted) saved(context, 'Marked present');
       } else {
-        await model.ask((api) => api.post('/api/v1/absences', {'staff_id': staffId, 'date': _today(), 'note': ''}));
+        final ok = await confirm(context, 'Mark as away?', date);
+        if (!ok || !mounted) return;
+        await model.ask((api) => api.post('/api/v1/absences', {'staff_id': staffId, 'date': date, 'note': ''}));
+        if (mounted) saved(context, 'Marked away');
       }
-      await loadReport();
+      await loadMonth();
     } on ApiException catch (e) {
-      if (context.mounted) toast(context, e.message);
+      if (mounted) toast(context, e.message);
+    }
+  }
+
+  Future<void> makeup() async {
+    final n = await askNumber(context, 'How many periods were made up?');
+    if (n == null || staffId == null) return;
+    try {
+      await context.read<AppModel>().ask((api) => api.post('/api/v1/makeups', {'staff_id': staffId, 'date': _today(), 'periods': n.round(), 'note': ''}));
+      await loadMonth();
+      if (mounted) saved(context, 'Make-up saved');
+    } on ApiException catch (e) {
+      if (mounted) toast(context, e.message);
     }
   }
 }
@@ -403,103 +488,6 @@ class _BackupScreenState extends State<BackupScreen> {
               },
             )),
         ],
-      ),
-    );
-  }
-}
-
-class TimetableScreen extends StatefulWidget {
-  const TimetableScreen({super.key});
-  @override
-  State<TimetableScreen> createState() => _TimetableScreenState();
-}
-
-class _TimetableScreenState extends State<TimetableScreen> {
-  List<Map<String, dynamic>> slots = [];
-  int days = 5;
-  int periods = 6;
-  String? error;
-
-  @override
-  void initState() { super.initState(); load(); }
-
-  Future<void> load() async {
-    try {
-      final raw = await context.read<AppModel>().ask((api) => api.get('/api/v1/timetable'));
-      final data = (raw as Map).map((k, v) => MapEntry(k.toString(), v));
-      final bell = (data['bell'] as Map?) ?? {};
-      days = (bell['days'] as num?)?.toInt() ?? 5;
-      periods = (bell['periods_per_day'] as num?)?.toInt() ?? 6;
-      slots = asMaps(data['slots']);
-      error = null;
-    } on ApiException catch (e) {
-      error = e.message;
-    }
-    if (context.mounted) setState(() {});
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final admin = context.watch<AppModel>().isAdmin;
-    const names = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-    return SchoolScaffold(
-      title: 'Timetable',
-      school: context.watch<AppModel>().school,
-      body: error != null
-          ? ErrorNote(error!, load)
-          : ListView(
-              padding: const EdgeInsets.all(16),
-              children: [
-                if (admin)
-                  FilledButton(onPressed: () async {
-                    try {
-                      await context.read<AppModel>().ask((api) => api.post('/api/v1/timetable/generate', {}));
-                      await load();
-                    } on ApiException catch (e) {
-                      if (context.mounted) toast(context, e.message);
-                    }
-                  }, child: const Text('Make the timetable')),
-                const SizedBox(height: 8),
-                if (slots.isEmpty) const EmptyNote('No timetable yet.'),
-                for (var d = 0; d < days; d++) ...[
-                  Text(names[d], style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: leaf)),
-                  for (final s in slots.where((s) => s['day'] == d))
-                    _slotTile(s),
-                ],
-              ],
-            ),
-    );
-  }
-
-  Widget _slotTile(Map<String, dynamic> s) {
-    final tile = ListTile(
-      title: Text('${s['class_name']} · ${s['subject_name']}', style: const TextStyle(fontWeight: FontWeight.w700)),
-      subtitle: Text('Period ${((s['period'] as num?)?.toInt() ?? 0) + 1} · ${s['teacher_name'] ?? ''}'),
-    );
-    if (!context.read<AppModel>().isAdmin) return Card(child: tile);
-    return DragTarget<Map<String, dynamic>>(
-      onAcceptWithDetails: (details) async {
-        final from = details.data;
-        try {
-          await context.read<AppModel>().ask((api) => api.post('/api/v1/timetable/move', {
-                'class_id': from['class_id'],
-                'from_day': from['day'],
-                'from_period': from['period'],
-                'to_day': s['day'],
-                'to_period': s['period'],
-              }));
-          await load();
-        } on ApiException catch (e) {
-          if (context.mounted) toast(context, e.message);
-        }
-      },
-      builder: (context, candidate, rejected) => Card(
-        color: candidate.isEmpty ? card : const Color(0xFFFFE8E8),
-        child: Draggable<Map<String, dynamic>>(
-          data: s,
-          feedback: Material(child: Text(s['subject_name'].toString(), style: const TextStyle(fontSize: 18))),
-          child: tile,
-        ),
       ),
     );
   }

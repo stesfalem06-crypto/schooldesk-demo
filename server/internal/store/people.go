@@ -130,6 +130,9 @@ func (s *Store) SaveClass(in Class) (Class, error) {
 		return Class{}, err
 	}
 	in.Name = clean(in.Name)
+	if in.HomeroomStaffID == "" {
+		return Class{}, errStr("Choose the one teacher who looks after this class")
+	}
 	now := Now()
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -138,6 +141,14 @@ func (s *Store) SaveClass(in Class) (Class, error) {
 		return Class{}, err
 	}
 	defer tx.Rollback()
+	var className, teacherName string
+	err = tx.QueryRow(`SELECT c.name, COALESCE(st.full_name, 'This teacher') FROM classes c LEFT JOIN staff st ON st.id = c.homeroom_staff_id WHERE c.homeroom_staff_id = ? AND c.id != ?`, in.HomeroomStaffID, in.ID).Scan(&className, &teacherName)
+	if err == nil {
+		return Class{}, errStr(teacherName + " already looks after " + className + ". A teacher can look after only one class.")
+	}
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return Class{}, err
+	}
 	if in.ID == "" {
 		in.ID = NewID()
 		_, err = tx.Exec(`INSERT INTO classes (id, name, level, grade, academic_year, homeroom_staff_id, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?)`,

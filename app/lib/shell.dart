@@ -126,3 +126,14 @@ Future<bool> confirm(BuildContext context, String title, String body, {bool dang
 void toast(BuildContext context, String text) {
   ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text, style: const TextStyle(fontSize: 16))));
 }
+
+void saved(BuildContext context, String text) {
+  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+    backgroundColor: passGreen,
+    content: Row(children: [
+      const Icon(Icons.check_circle, color: Colors.white),
+      const SizedBox(width: 8),
+      Expanded(child: Text(text, style: const TextStyle(fontSize: 16, color: Colors.white))),
+    ]),
+  ));
+}

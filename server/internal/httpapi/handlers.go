@@ -193,17 +193,28 @@ func (a *API) listClassSubjects(w http.ResponseWriter, r *http.Request) {
 		a.fail(w, 400, err.Error())
 		return
 	}
-	if u.SeesSchool() || classID != "" {
-		a.ok(w, list)
-		return
+	a.ok(w, a.visibleSubjects(u, list))
+}
+
+func (a *API) visibleSubjects(u store.User, list []store.ClassSubject) []store.ClassSubject {
+	if u.SeesSchool() {
+		for i := range list {
+			list[i].CanEdit = false
+		}
+		return list
 	}
 	var mine []store.ClassSubject
 	for _, cs := range list {
-		if cs.TeacherStaffID == u.StaffID {
+		edit := a.canTeach(u, cs.ID)
+		if edit || a.canHomeroom(u, cs.ClassID) {
+			cs.CanEdit = edit
 			mine = append(mine, cs)
 		}
 	}
-	a.ok(w, mine)
+	if mine == nil {
+		mine = []store.ClassSubject{}
+	}
+	return mine
 }
 
 func (a *API) addClassSubject(w http.ResponseWriter, r *http.Request) {
@@ -537,6 +548,22 @@ func (a *API) addPayment(w http.ResponseWriter, r *http.Request) {
 	a.call(w, err, got)
 }
 
+func (a *API) feeSummary(w http.ResponseWriter, r *http.Request) {
+	if _, ok := a.must(w, r, "admin", "director"); !ok {
+		return
+	}
+	got, err := a.Store.FeeSummary()
+	a.call(w, err, got)
+}
+
+func (a *API) standingSummary(w http.ResponseWriter, r *http.Request) {
+	if _, ok := a.must(w, r, "admin", "director"); !ok {
+		return
+	}
+	got, err := a.Store.StandingSummary()
+	a.call(w, err, got)
+}
+
 func (a *API) finance(w http.ResponseWriter, r *http.Request) {
 	if _, ok := a.must(w, r, "admin", "director"); !ok {
 		return
@@ -623,6 +650,20 @@ func (a *API) addSports(w http.ResponseWriter, r *http.Request) {
 	}
 	got, err := a.Store.AddSports(in)
 	a.call(w, err, got)
+}
+
+func (a *API) listAbsences(w http.ResponseWriter, r *http.Request) {
+	if _, ok := a.must(w, r, "admin", "director"); !ok {
+		return
+	}
+	year, _ := strconv.Atoi(r.URL.Query().Get("year"))
+	month, _ := strconv.Atoi(r.URL.Query().Get("month"))
+	if year == 0 || month == 0 {
+		now := a.now()
+		year, month = now.Year(), int(now.Month())
+	}
+	list, err := a.Store.ListAbsences(year, month)
+	a.call(w, err, list)
 }
 
 func (a *API) addAbsence(w http.ResponseWriter, r *http.Request) {
@@ -912,16 +953,16 @@ func (a *API) sync(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) canTeach(u store.User, classSubjectID string) bool {
-	if u.IsAdmin() {
-		return true
+	if u.StaffID == "" {
+		return false
 	}
 	ok, _ := a.Store.Teaches(u.StaffID, classSubjectID)
 	return ok
 }
 
 func (a *API) canHomeroom(u store.User, classID string) bool {
-	if u.IsAdmin() {
-		return true
+	if u.StaffID == "" || classID == "" {
+		return false
 	}
 	ok, _ := a.Store.HomeroomOf(u.StaffID, classID)
 	return ok

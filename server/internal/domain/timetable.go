@@ -4,7 +4,6 @@ import (
 	"errors"
 	"math/rand"
 	"sort"
-	"time"
 )
 
 type LessonNeed struct {
@@ -36,6 +35,7 @@ type unit struct {
 
 // Solve builds a clash-free week. A teacher is in one class at a time,
 // a class has one lesson at a time, and unavailable periods stay empty.
+// It does not give up because the computer is slow.
 func Solve(p Problem) ([]Placement, error) {
 	if p.Days < 1 || p.Days > 7 || p.PeriodsPerDay < 1 || p.PeriodsPerDay > 16 {
 		return nil, errors.New("check the days and the periods in a day")
@@ -56,6 +56,9 @@ func Solve(p Problem) ([]Placement, error) {
 		for i := 0; i < ls.Periods; i++ {
 			units = append(units, unit{ls.ID, ls.ClassID, ls.TeacherID})
 		}
+	}
+	if len(units) == 0 {
+		return []Placement{}, nil
 	}
 	for _, n := range classLoad {
 		if n > slots {
@@ -87,21 +90,68 @@ func Solve(p Problem) ([]Placement, error) {
 		}
 		return units[i].teacher < units[j].teacher
 	})
+	if got, ok := greedy(p, units); ok {
+		return got, nil
+	}
 	rng := rand.New(rand.NewSource(1))
-	deadline := time.Now().Add(2 * time.Second)
-	for attempt := 0; attempt < 24; attempt++ {
-		if time.Now().After(deadline) {
-			break
-		}
+	for attempt := 0; attempt < 12; attempt++ {
 		order := append([]unit(nil), units...)
 		if attempt > 0 {
 			rng.Shuffle(len(order), func(i, j int) { order[i], order[j] = order[j], order[i] })
 		}
-		if got, ok := search(p, order, rng, 200000, deadline); ok {
+		if got, ok := search(p, order, rng, 1000000); ok {
 			return got, nil
 		}
 	}
 	return nil, errors.New("no clash-free timetable was found. Free a teacher or lower the periods")
+}
+
+func greedy(p Problem, units []unit) ([]Placement, bool) {
+	classBusy := map[string]map[int]bool{}
+	teacherBusy := map[string]map[int]bool{}
+	lessonDay := map[string]map[int]int{}
+	place := make([]Placement, 0, len(units))
+	for _, u := range units {
+		bestScore := -1 << 30
+		found := false
+		var best cand
+		for day := 0; day < p.Days; day++ {
+			for period := 0; period < p.PeriodsPerDay; period++ {
+				slot := day*p.PeriodsPerDay + period
+				if classBusy[u.classID][slot] || teacherBusy[u.teacher][slot] || blocked(p, u.teacher, slot) {
+					continue
+				}
+				score := 40
+				if lessonDay[u.lesson][day] == 0 {
+					score += 30
+				}
+				score -= lessonDay[u.lesson][day] * 12
+				score -= day
+				if score > bestScore {
+					bestScore = score
+					best = cand{day, period, slot, score}
+					found = true
+				}
+			}
+		}
+		if !found {
+			return nil, false
+		}
+		if classBusy[u.classID] == nil {
+			classBusy[u.classID] = map[int]bool{}
+		}
+		if teacherBusy[u.teacher] == nil {
+			teacherBusy[u.teacher] = map[int]bool{}
+		}
+		if lessonDay[u.lesson] == nil {
+			lessonDay[u.lesson] = map[int]int{}
+		}
+		classBusy[u.classID][best.slot] = true
+		teacherBusy[u.teacher][best.slot] = true
+		lessonDay[u.lesson][best.day]++
+		place = append(place, Placement{ClassID: u.classID, TeacherID: u.teacher, LessonID: u.lesson, Day: best.day, Period: best.period})
+	}
+	return place, true
 }
 
 func blocked(p Problem, teacher string, slot int) bool {
@@ -115,7 +165,7 @@ type cand struct {
 	day, period, slot, score int
 }
 
-func search(p Problem, order []unit, rng *rand.Rand, limit int, deadline time.Time) ([]Placement, bool) {
+func search(p Problem, order []unit, rng *rand.Rand, limit int) ([]Placement, bool) {
 	classBusy := map[string]map[int]bool{}
 	teacherBusy := map[string]map[int]bool{}
 	lessonDay := map[string]map[int]int{}
@@ -127,7 +177,7 @@ func search(p Problem, order []unit, rng *rand.Rand, limit int, deadline time.Ti
 			return true
 		}
 		nodes++
-		if nodes > limit || time.Now().After(deadline) {
+		if nodes > limit {
 			return false
 		}
 		u := order[i]
