@@ -18,7 +18,7 @@ ArchitecturesInstallIn64BitMode=x64compatible
 PrivilegesRequired=admin
 DisableProgramGroupPage=yes
 SourceDir=..
-OutputDir=..\dist
+OutputDir=dist
 
 [Files]
 Source: "dist\schooldesk-server-windows-amd64.exe"; DestDir: "{app}"; DestName: "schooldesk-server.exe"
