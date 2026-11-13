@@ -5,7 +5,7 @@
 #define AppVersion "1.0.0"
 
 [Setup]
-AppId={{A7B3E1C4-6D20-4F5A-9B11-0C8E2F4A6D31}
+AppId={{A7B3E1C4-6D20-4F5A-9B11-0C8E2F4A6D31}}
 AppName={#AppName}
 AppVersion={#AppVersion}
 DefaultDirName={autopf}\SchoolDesk
@@ -18,7 +18,7 @@ ArchitecturesInstallIn64BitMode=x64compatible
 PrivilegesRequired=admin
 DisableProgramGroupPage=yes
 SourceDir=..
-OutputDir=dist
+OutputDir=..\dist
 
 [Files]
 Source: "dist\schooldesk-server-windows-amd64.exe"; DestDir: "{app}"; DestName: "schooldesk-server.exe"

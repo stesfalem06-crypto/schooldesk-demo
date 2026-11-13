@@ -32,4 +32,4 @@ The apk is `build/app/outputs/flutter-apk/app-release.apk`.
 
 Change the store password before a school uses the apk. The sample password above is only so a build can be made.
 
-GitHub Actions builds this apk as the `android-apk` artifact. The keystore it creates is only for that build and is not saved.
+GitHub Actions builds this apk as the `android-apk` artifact. If the repository secrets `ANDROID_KEYSTORE_BASE64` and `ANDROID_KEYSTORE_PASSWORD` are set, the apk is signed with that key. Optional secrets are `ANDROID_KEY_ALIAS` (default `schooldesk`) and `ANDROID_KEY_PASSWORD` (defaults to the store password). When those secrets are absent, the apk is debug-signed and the workflow says so. A debug-signed build will not update an install that used the release key.

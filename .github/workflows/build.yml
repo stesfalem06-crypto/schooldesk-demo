@@ -5,6 +5,9 @@ on:
   push:
     branches: [main]
 
+permissions:
+  contents: read
+
 jobs:
   server:
     runs-on: ubuntu-latest
@@ -35,11 +38,22 @@ jobs:
         run: |
           ext=""
           if [ "$GOOS" = "windows" ]; then ext=".exe"; fi
+          mkdir -p ../dist
           go build -trimpath -ldflags "-s -w" -o "../dist/schooldesk-server-${GOOS}-${GOARCH}${ext}" ./cmd/schooldesk-server
       - uses: actions/upload-artifact@v4
         with:
           name: server-${{ matrix.goos }}-${{ matrix.goarch }}
           path: dist/schooldesk-server-*
+          if-no-files-found: error
+      - name: Upload Pi package
+        if: matrix.goos == 'linux' && matrix.goarch == 'arm64'
+        uses: actions/upload-artifact@v4
+        with:
+          name: pi-server
+          path: |
+            dist/schooldesk-server-linux-arm64
+            packaging/pi-setup.sh
+          if-no-files-found: error
 
   android:
     runs-on: ubuntu-latest
@@ -48,11 +62,43 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
-      - name: Release keystore
+      - name: Choose signing key
         working-directory: app
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
         run: |
-          keytool -genkeypair -v -keystore schooldesk-release.jks -storepass schooldesk -keypass schooldesk -alias schooldesk -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=SchoolDesk, OU=9 Multimedia and IT Solutions, O=9 Multimedia and IT Solutions, L=Asmara, C=ER"
-          printf 'storePassword=schooldesk\nkeyPassword=schooldesk\nkeyAlias=schooldesk\nstoreFile=../../schooldesk-release.jks\n' > android/key.properties
+          set -euo pipefail
+          if [ -n "$KEYSTORE_B64" ] && [ -n "$STORE_PASSWORD" ]; then
+            printf '%s' "$KEYSTORE_B64" | tr -d ' \n\r' | base64 -d > schooldesk-release.jks
+            export KEY_ALIAS_VALUE="${KEY_ALIAS:-schooldesk}"
+            export KEY_PASSWORD_VALUE="${KEY_PASSWORD:-$STORE_PASSWORD}"
+            python3 - << 'PY'
+          import os
+          path = "android/key.properties"
+          with open(path, "w", encoding="utf-8") as fh:
+              fh.write("storePassword=" + os.environ["STORE_PASSWORD"] + "\n")
+              fh.write("keyPassword=" + os.environ["KEY_PASSWORD_VALUE"] + "\n")
+              fh.write("keyAlias=" + os.environ["KEY_ALIAS_VALUE"] + "\n")
+              fh.write("storeFile=../../schooldesk-release.jks\n")
+          PY
+            echo "Signed with the release keystore from repository secrets." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "::notice title=Android signing::No release keystore secret was found. This APK is debug-signed. Add ANDROID_KEYSTORE_BASE64 and ANDROID_KEYSTORE_PASSWORD so later updates install over the same app."
+            {
+              echo "No release keystore secret was found."
+              echo
+              echo "This APK is **debug-signed**. A later release signed with a different key will not install over it."
+              echo "Add these repository secrets to use the real key:"
+              echo
+              echo "- \`ANDROID_KEYSTORE_BASE64\`"
+              echo "- \`ANDROID_KEYSTORE_PASSWORD\`"
+              echo "- \`ANDROID_KEY_ALIAS\` (optional, default \`schooldesk\`)"
+              echo "- \`ANDROID_KEY_PASSWORD\` (optional, defaults to the store password)"
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
       - name: Build apk
         working-directory: app
         run: flutter build apk --release
@@ -60,6 +106,7 @@ jobs:
         with:
           name: android-apk
           path: app/build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
 
   windows-app:
     runs-on: windows-latest
@@ -68,27 +115,61 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
-      - name: Build Windows app
-        working-directory: app
-        run: flutter build windows --release
-      - name: Install Inno Setup
-        run: choco install innosetup -y
-      - name: Stage installer inputs
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Force dist/windows-app | Out-Null
-          Copy-Item -Recurse app/build/windows/x64/runner/Release/* dist/windows-app/
       - uses: actions/setup-go@v5
         with:
           go-version: "1.22"
+      - name: Build Windows desktop app
+        working-directory: app
+        run: flutter build windows --release
       - name: Build Windows server
         working-directory: server
+        shell: pwsh
         run: |
-          $env:CGO_ENABLED="0"
-          go build -trimpath -ldflags "-s -w" -o ../dist/schooldesk-server-windows-amd64.exe ./cmd/schooldesk-server
+          $env:CGO_ENABLED = "0"
+          New-Item -ItemType Directory -Force -Path ..\dist | Out-Null
+          go build -trimpath -ldflags "-s -w" -o ..\dist\schooldesk-server-windows-amd64.exe .\cmd\schooldesk-server
+      - name: Stage app files
+        shell: pwsh
+        run: |
+          $exe = Get-ChildItem -Path app\build\windows -Recurse -Filter schooldesk.exe |
+            Where-Object { $_.FullName -match '\\Release\\' } |
+            Select-Object -First 1
+          if (-not $exe) { throw "schooldesk.exe was not produced" }
+          $release = $exe.Directory.FullName
+          Write-Host "Release folder: $release"
+          New-Item -ItemType Directory -Force -Path dist\windows-app | Out-Null
+          Copy-Item -Path (Join-Path $release '*') -Destination dist\windows-app -Recurse -Force
+          if (-not (Test-Path dist\schooldesk-server-windows-amd64.exe)) {
+            throw "Windows server exe is missing"
+          }
+      - name: Install Inno Setup
+        shell: pwsh
+        run: |
+          $iscc = @(
+            "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
+            "$env:ProgramFiles\Inno Setup 6\ISCC.exe"
+          ) | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (-not $iscc) {
+            Invoke-WebRequest -Uri "https://jrsoftware.org/download.php/is.exe" -OutFile "$env:RUNNER_TEMP\innosetup.exe"
+            $proc = Start-Process -FilePath "$env:RUNNER_TEMP\innosetup.exe" -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART","/SP-" -Wait -PassThru
+            if ($proc.ExitCode -ne 0 -and $proc.ExitCode -ne 3010) {
+              throw "Inno Setup installer exited $($proc.ExitCode)"
+            }
+          }
       - name: Compile installer
-        run: '& "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" packaging/SchoolDesk.iss'
+        shell: pwsh
+        run: |
+          $iscc = @(
+            "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
+            "$env:ProgramFiles\Inno Setup 6\ISCC.exe"
+          ) | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (-not $iscc) { throw "ISCC.exe was not found" }
+          Write-Host "Using $iscc"
+          & $iscc packaging\SchoolDesk.iss
+          if ($LASTEXITCODE -ne 0) { throw "ISCC failed with $LASTEXITCODE" }
+          if (-not (Test-Path dist\SchoolDesk-Setup.exe)) { throw "SchoolDesk-Setup.exe was not written" }
       - uses: actions/upload-artifact@v4
         with:
           name: windows-installer
           path: dist/SchoolDesk-Setup.exe
+          if-no-files-found: error
