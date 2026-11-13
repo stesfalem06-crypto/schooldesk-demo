@@ -2,14 +2,20 @@ import 'package:material_ui/material_ui.dart';
 import 'package:provider/provider.dart';
 
 import 'app_state.dart';
+import 'local_server.dart';
 import 'screens.dart';
 import 'theme.dart';
 import 'vault.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  final local = await startBundledServer();
   final model = AppModel(Vault());
   await model.boot();
+  if (local && (model.base == null || model.base!.isEmpty)) {
+    final skip = await model.vault.read('skip_local');
+    if (skip != '1') await model.setBase('http://127.0.0.1:8741');
+  }
   runApp(ChangeNotifierProvider.value(value: model, child: const SchoolApp()));
 }
 

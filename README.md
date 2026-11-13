@@ -5,7 +5,7 @@ SchoolDesk is the offline school record for one school. It runs on the school ne
 Each school has:
 
 - a small server on a Raspberry Pi, or on a Windows PC if there is no Pi
-- a Windows app for the school admin and the director
+- a Windows or Mac app for the school admin and the director
 - an Android app for teachers
 
 The phone can keep marks when it is away from the school Wi-Fi and send them later.
@@ -62,6 +62,10 @@ sh scripts/build-server.sh
 ```
 
 The desktop `.exe` installer is built on Windows. The steps are in [docs/windows.md](docs/windows.md). GitHub Actions file `.github/workflows/build.yml` builds `SchoolDesk-Setup.exe` on a Windows runner.
+
+## Mac disk image
+
+The same workflow builds `SchoolDesk.dmg` on a Mac runner. Opening the app starts the bundled server on that Mac. How to open the unsigned app is in [docs/macos.md](docs/macos.md).
 
 ## Android apk
 

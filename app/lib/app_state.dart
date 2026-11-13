@@ -66,6 +66,9 @@ class AppModel extends ChangeNotifier {
     licensed = false;
     await vault.write('base', '');
     await vault.write('token', '');
+    if (defaultTargetPlatform == TargetPlatform.macOS) {
+      await vault.write('skip_local', '1');
+    }
     notifyListeners();
   }
 
