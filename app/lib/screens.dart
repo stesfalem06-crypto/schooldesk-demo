@@ -1,0 +1,648 @@
+import 'package:material_ui/material_ui.dart';
+import 'package:provider/provider.dart';
+import 'package:qr_flutter/qr_flutter.dart';
+
+import 'api.dart';
+import 'app_state.dart';
+import 'office.dart';
+import 'shell.dart';
+import 'theme.dart';
+import 'widgets.dart';
+
+class ConnectScreen extends StatefulWidget {
+  const ConnectScreen({super.key});
+  @override
+  State<ConnectScreen> createState() => _ConnectScreenState();
+}
+
+class _ConnectScreenState extends State<ConnectScreen> {
+  final ip = TextEditingController();
+  List<String> found = [];
+  bool looking = false;
+  String? problem;
+
+  Future<void> search() async {
+    setState(() { looking = true; problem = null; });
+    final list = await SchoolApi.find();
+    setState(() { looking = false; found = list; if (list.isEmpty) problem = 'No school computer answered. Type its number.'; });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SchoolScaffold(
+      title: 'Find the school',
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          const Text('The school computer must be on.', style: TextStyle(fontSize: 18)),
+          const SizedBox(height: 12),
+          FilledButton.icon(onPressed: looking ? null : search, icon: const Icon(Icons.wifi_find), label: Text(looking ? 'Looking…' : 'Find the school')),
+          if (problem != null) Padding(padding: const EdgeInsets.only(top: 8), child: Text(problem!, style: const TextStyle(color: failRed, fontSize: 16))),
+          for (final host in found)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: FilledButton(onPressed: () => context.read<AppModel>().setBase(host), child: Text(host)),
+            ),
+          const SizedBox(height: 18),
+          TextField(controller: ip, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Or type the number, like 192.168.1.20')),
+          const SizedBox(height: 8),
+          FilledButton(onPressed: () => context.read<AppModel>().setBase(ip.text), child: const Text('Open')),
+        ],
+      ),
+    );
+  }
+}
+
+class LockScreen extends StatefulWidget {
+  const LockScreen({super.key});
+  @override
+  State<LockScreen> createState() => _LockScreenState();
+}
+
+class _LockScreenState extends State<LockScreen> {
+  final code = TextEditingController();
+  String? problem;
+
+  @override
+  void initState() {
+    super.initState();
+    context.read<AppModel>().refreshLicense();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final model = context.watch<AppModel>();
+    return SchoolScaffold(
+      title: 'Locked',
+      school: model.school,
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Text(model.lockMessage, style: const TextStyle(fontSize: 20)),
+          const SizedBox(height: 12),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(children: [
+                const Text('School computer number', style: TextStyle(fontSize: 16)),
+                const SizedBox(height: 6),
+                Text(model.machineId.isEmpty ? '…' : model.machineId, textAlign: TextAlign.center, style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w800, color: leaf, letterSpacing: 1)),
+                const SizedBox(height: 8),
+                if (model.qrPayload.isNotEmpty) QrImageView(data: model.qrPayload, size: 200),
+              ]),
+            ),
+          ),
+          const SizedBox(height: 12),
+          TextField(controller: code, decoration: const InputDecoration(labelText: 'Unlock code')),
+          const SizedBox(height: 8),
+          FilledButton(
+            onPressed: () async {
+              final msg = await model.unlock(code.text);
+              if (msg != null && context.mounted) setState(() => problem = msg);
+            },
+            child: const Text('Unlock'),
+          ),
+          if (problem != null) Text(problem!, style: const TextStyle(color: failRed, fontSize: 16)),
+          TextButton(onPressed: model.forget, child: const Text('Use a different computer')),
+        ],
+      ),
+    );
+  }
+}
+
+class LoginScreen extends StatefulWidget {
+  const LoginScreen({super.key});
+  @override
+  State<LoginScreen> createState() => _LoginScreenState();
+}
+
+class _LoginScreenState extends State<LoginScreen> {
+  final name = TextEditingController();
+  final pass = TextEditingController();
+  String? problem;
+  bool busy = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final model = context.watch<AppModel>();
+    return SchoolScaffold(
+      title: 'Sign in',
+      school: model.school,
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          const Icon(Icons.school, size: 72, color: leaf),
+          const SizedBox(height: 12),
+          TextField(controller: name, decoration: const InputDecoration(labelText: 'Your name')),
+          const SizedBox(height: 10),
+          TextField(controller: pass, obscureText: true, decoration: const InputDecoration(labelText: 'Password')),
+          const SizedBox(height: 12),
+          FilledButton(
+            onPressed: busy
+                ? null
+                : () async {
+                    setState(() { busy = true; problem = null; });
+                    final msg = await model.signIn(name.text.trim(), pass.text);
+                    if (context.mounted) setState(() { busy = false; problem = msg; });
+                  },
+            child: Text(busy ? 'Opening…' : 'Go in'),
+          ),
+          if (problem != null) Text(problem!, style: const TextStyle(color: failRed, fontSize: 16)),
+        ],
+      ),
+    );
+  }
+}
+
+class HomeScreen extends StatelessWidget {
+  const HomeScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final model = context.watch<AppModel>();
+    final tiles = <Widget>[];
+    void add(IconData icon, String label, Color color, Widget page) {
+      tiles.add(BigTile(icon: icon, label: label, color: color, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => page))));
+    }
+    if (model.role == 'teacher' || model.seesSchool) {
+      add(Icons.edit, 'Marks', leaf, const MarksScreen());
+      add(Icons.leaderboard, 'Results', passGreen, const ResultsScreen());
+      add(Icons.calendar_month, 'Timetable', const Color(0xFF2C6BED), const TimetableScreen());
+    }
+    if (model.isHomeroom || model.isAdmin) {
+      add(Icons.groups, 'My class', const Color(0xFF6A4C93), const StudentsScreen());
+      add(Icons.payments, 'Fees', const Color(0xFFE8A317), const FeesScreen());
+    }
+    if (model.seesSchool) {
+      add(Icons.dashboard, 'School', leaf, const DashboardScreen());
+      add(Icons.account_balance_wallet, 'Money', const Color(0xFFE8A317), const MoneyScreen());
+      add(Icons.badge, 'Staff', const Color(0xFF2C6BED), const StaffScreen());
+      add(Icons.event_busy, 'Absence', failRed, const AbsenceScreen());
+    }
+    if (model.isAdmin) {
+      add(Icons.tune, 'Settings', ink, const SettingsScreen());
+      add(Icons.backup, 'Backup', leafDark, const BackupScreen());
+      add(Icons.person_add, 'Logins', const Color(0xFF6A4C93), const UsersScreen());
+    }
+    if (model.isDirector) {
+      add(Icons.groups_2, 'Meetings', const Color(0xFF6A4C93), const MeetingsScreen());
+      add(Icons.description, 'Report', leaf, const ReportScreen());
+    }
+    return SchoolScaffold(
+      title: model.user['display_name']?.toString() ?? 'Home',
+      school: model.school,
+      actions: [
+        IconButton(tooltip: 'Leave', onPressed: model.signOut, icon: const Icon(Icons.logout, size: 28)),
+      ],
+      body: GridView.count(
+        padding: const EdgeInsets.all(16),
+        crossAxisCount: MediaQuery.sizeOf(context).width > 700 ? 3 : 2,
+        mainAxisSpacing: 12,
+        crossAxisSpacing: 12,
+        children: tiles,
+      ),
+    );
+  }
+}
+
+class MarksScreen extends StatefulWidget {
+  const MarksScreen({super.key});
+  @override
+  State<MarksScreen> createState() => _MarksScreenState();
+}
+
+class _MarksScreenState extends State<MarksScreen> {
+  List<Map<String, dynamic>> subjects = [];
+  String? error;
+  bool loading = true;
+
+  @override
+  void initState() { super.initState(); load(); }
+
+  Future<void> load() async {
+    setState(() { loading = true; error = null; });
+    try {
+      final data = await context.read<AppModel>().ask((api) => api.get('/api/v1/class-subjects'));
+      subjects = asMaps(data);
+    } on ApiException catch (e) {
+      error = e.message;
+    }
+    if (context.mounted) setState(() => loading = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SchoolScaffold(
+      title: 'Marks',
+      school: context.watch<AppModel>().school,
+      body: loading
+          ? const Center(child: CircularProgressIndicator())
+          : error != null
+              ? ErrorNote(error!, load)
+              : subjects.isEmpty
+                  ? const EmptyNote('No subjects yet.')
+                  : ListView(
+                      padding: const EdgeInsets.all(16),
+                      children: [
+                        for (final s in subjects)
+                          Card(
+                            child: ListTile(
+                              leading: const Icon(Icons.menu_book, color: leaf, size: 32),
+                              title: Text('${s['class_name']} · ${s['subject_name']}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+                              trailing: const Icon(Icons.chevron_right),
+                              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => AssessmentsScreen(subject: s))),
+                            ),
+                          ),
+                      ],
+                    ),
+    );
+  }
+}
+
+class AssessmentsScreen extends StatefulWidget {
+  const AssessmentsScreen({super.key, required this.subject});
+  final Map<String, dynamic> subject;
+  @override
+  State<AssessmentsScreen> createState() => _AssessmentsScreenState();
+}
+
+class _AssessmentsScreenState extends State<AssessmentsScreen> {
+  List<Map<String, dynamic>> items = [];
+  bool loading = true;
+  String? error;
+
+  @override
+  void initState() { super.initState(); load(); }
+
+  Future<void> load() async {
+    try {
+      final data = await context.read<AppModel>().ask((api) => api.get('/api/v1/assessments?class_subject_id=${widget.subject['id']}'));
+      items = asMaps(data);
+      error = null;
+    } on ApiException catch (e) {
+      error = e.message;
+    }
+    if (context.mounted) setState(() => loading = false);
+  }
+
+  Future<void> add(int half) async {
+    final title = half == 1 ? 'First half mark' : 'Second half mark';
+    try {
+      await context.read<AppModel>().ask((api) => api.post('/api/v1/assessments', {
+            'class_subject_id': widget.subject['id'],
+            'component': 'classwork',
+            'half': half,
+            'title': title,
+            'max_marks': 10,
+          }));
+      await load();
+    } on ApiException catch (e) {
+      if (context.mounted) toast(context, e.message);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SchoolScaffold(
+      title: widget.subject['subject_name']?.toString() ?? 'Marks',
+      school: context.watch<AppModel>().school,
+      body: loading
+          ? const Center(child: CircularProgressIndicator())
+          : error != null
+              ? ErrorNote(error!, load)
+              : ListView(
+                  padding: const EdgeInsets.all(16),
+                  children: [
+                    Row(children: [
+                      Expanded(child: FilledButton(onPressed: () => add(1), child: const Text('First half'))),
+                      const SizedBox(width: 8),
+                      Expanded(child: FilledButton(onPressed: () => add(2), child: const Text('Second half'))),
+                    ]),
+                    const SizedBox(height: 8),
+                    for (final a in items)
+                      Card(
+                        child: ListTile(
+                          title: Text(a['title']?.toString() ?? '', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+                          subtitle: Text(a['component'] == 'exam' ? 'Exam out of 40' : 'Half ${a['half']} · out of ${a['max_marks']}'),
+                          trailing: const Icon(Icons.chevron_right),
+                          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ScoreScreen(subject: widget.subject, assessment: a))),
+                        ),
+                      ),
+                  ],
+                ),
+    );
+  }
+}
+
+class ScoreScreen extends StatefulWidget {
+  const ScoreScreen({super.key, required this.subject, required this.assessment});
+  final Map<String, dynamic> subject;
+  final Map<String, dynamic> assessment;
+  @override
+  State<ScoreScreen> createState() => _ScoreScreenState();
+}
+
+class _ScoreScreenState extends State<ScoreScreen> {
+  List<Map<String, dynamic>> students = [];
+  Map<String, Map<String, dynamic>> scores = {};
+  bool loading = true;
+  String? error;
+
+  @override
+  void initState() { super.initState(); load(); }
+
+  Future<void> load() async {
+    final model = context.read<AppModel>();
+    try {
+      final people = await model.ask((api) => api.get('/api/v1/students?class_id=${widget.subject['class_id']}'));
+      final marks = await model.ask((api) => api.get('/api/v1/scores?assessment_id=${widget.assessment['id']}'));
+      students = asMaps(people);
+      scores = {for (final s in asMaps(marks)) s['student_id'].toString(): s};
+      error = null;
+    } on ApiException catch (e) {
+      error = e.message;
+    }
+    if (context.mounted) setState(() => loading = false);
+  }
+
+  Future<void> enter(Map<String, dynamic> student) async {
+    final model = context.read<AppModel>();
+    final current = scores[student['id'].toString()];
+    final value = await askNumber(context, student['full_name'].toString(), hint: 'Out of ${widget.assessment['max_marks']}', initial: current?['score']?.toString() ?? '');
+    if (value == null) return;
+    final body = {
+      'assessment_id': widget.assessment['id'],
+      'student_id': student['id'],
+      'score': value,
+      'base_revision': current?['revision'] ?? 0,
+    };
+    try {
+      final saved = await model.ask((api) => api.post('/api/v1/scores', body));
+      if (saved is Map) scores[student['id'].toString()] = saved.map((k, v) => MapEntry(k.toString(), v));
+      if (context.mounted) setState(() {});
+    } on ApiException catch (e) {
+      if (e.status == 0 || e.message.contains('not on this network')) {
+        await model.queueScore(body);
+        if (context.mounted) toast(context, 'Saved on this phone. It will go to school when the network is back.');
+      } else if (context.mounted) {
+        toast(context, e.message);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final model = context.watch<AppModel>();
+    return SchoolScaffold(
+      title: widget.assessment['title']?.toString() ?? 'Marks',
+      school: model.school,
+      actions: [
+        IconButton(
+          tooltip: 'Undo',
+          onPressed: () async {
+            try {
+              await model.ask((api) => api.post('/api/v1/scores/undo', {}));
+              await load();
+              if (context.mounted) toast(context, 'Last mark undone');
+            } on ApiException catch (e) {
+              if (context.mounted) toast(context, e.message);
+            }
+          },
+          icon: const Icon(Icons.undo, size: 28),
+        ),
+      ],
+      body: loading
+          ? const Center(child: CircularProgressIndicator())
+          : error != null
+              ? ErrorNote(error!, load)
+              : ListView(
+                  padding: const EdgeInsets.all(16),
+                  children: [
+                    if (model.outbox.isNotEmpty)
+                      Card(color: const Color(0xFFFFF4D6), child: ListTile(title: Text('${model.outbox.length} marks waiting to send'), trailing: FilledButton(onPressed: () async {
+                        final msgs = await model.flush();
+                        if (context.mounted) toast(context, msgs.isEmpty ? 'Sent' : msgs.join(' '));
+                        await load();
+                      }, child: const Text('Send')))),
+                    for (final s in students)
+                      if (s['dropped_out'] != true)
+                        Card(
+                          child: ListTile(
+                            title: Text(s['full_name'].toString(), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+                            trailing: Text(
+                              scores[s['id'].toString()]?['score']?.toString() ?? '—',
+                              style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800, color: scores[s['id'].toString()]?['score'] == null ? ink : passGreen),
+                            ),
+                            onTap: () => enter(s),
+                          ),
+                        ),
+                  ],
+                ),
+    );
+  }
+}
+
+class ResultsScreen extends StatefulWidget {
+  const ResultsScreen({super.key});
+  @override
+  State<ResultsScreen> createState() => _ResultsScreenState();
+}
+
+class _ResultsScreenState extends State<ResultsScreen> {
+  List<Map<String, dynamic>> classes = [];
+  Map<String, dynamic>? picked;
+  bool loading = true;
+  String? error;
+
+  @override
+  void initState() { super.initState(); loadClasses(); }
+
+  Future<void> loadClasses() async {
+    try {
+      classes = asMaps(await context.read<AppModel>().ask((api) => api.get('/api/v1/classes')));
+      error = null;
+      if (classes.length == 1) await open(classes.first);
+    } on ApiException catch (e) {
+      error = e.message;
+    }
+    if (context.mounted) setState(() => loading = false);
+  }
+
+  Future<void> open(Map<String, dynamic> cls) async {
+    setState(() => loading = true);
+    try {
+      final data = await context.read<AppModel>().ask((api) => api.get('/api/v1/classes/${cls['id']}/results'));
+      picked = (data as Map).map((k, v) => MapEntry(k.toString(), v));
+      error = null;
+    } on ApiException catch (e) {
+      error = e.message;
+    }
+    if (context.mounted) setState(() => loading = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final students = asMaps(picked?['students']);
+    return SchoolScaffold(
+      title: 'Results',
+      school: context.watch<AppModel>().school,
+      body: loading
+          ? const Center(child: CircularProgressIndicator())
+          : error != null
+              ? ErrorNote(error!, loadClasses)
+              : ListView(
+                  padding: const EdgeInsets.all(16),
+                  children: [
+                    if (picked == null)
+                      for (final c in classes)
+                        Card(child: ListTile(title: Text(c['name'].toString(), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800)), onTap: () => open(c))),
+                    if (picked != null)
+                      for (final s in students)
+                        _resultCard(s),
+                  ],
+                ),
+    );
+  }
+
+  Widget _resultCard(Map<String, dynamic> row) {
+    final student = (row['student'] as Map?)?.map((k, v) => MapEntry(k.toString(), v)) ?? {};
+    final standing = (row['standing'] as Map?)?.map((k, v) => MapEntry(k.toString(), v)) ?? {};
+    final status = standing['status']?.toString() ?? '';
+    final color = status == 'promoted' ? passGreen : status == 'failed' ? failRed : ink;
+    final label = status == 'promoted' ? 'Promoted' : status == 'failed' ? 'Failed' : status == 'dropout' ? 'Left' : 'Not ready';
+    return Card(
+      child: ListTile(
+        title: Text(student['full_name']?.toString() ?? '', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+        subtitle: Text('Average ${standing['average'] ?? '—'}   Rank ${standing['rank'] ?? '—'}', style: const TextStyle(fontSize: 16)),
+        trailing: Text(label, style: TextStyle(color: color, fontWeight: FontWeight.w800, fontSize: 16)),
+      ),
+    );
+  }
+}
+
+class StudentsScreen extends StatefulWidget {
+  const StudentsScreen({super.key});
+  @override
+  State<StudentsScreen> createState() => _StudentsScreenState();
+}
+
+class _StudentsScreenState extends State<StudentsScreen> {
+  String? classId;
+  List<Map<String, dynamic>> classes = [];
+  List<Map<String, dynamic>> students = [];
+  Map<String, dynamic>? summary;
+  bool loading = true;
+
+  @override
+  void initState() { super.initState(); boot(); }
+
+  Future<void> boot() async {
+    final model = context.read<AppModel>();
+    classes = asMaps(await model.ask((api) => api.get('/api/v1/classes')));
+    classId = model.homerooms.isNotEmpty ? model.homerooms.first : (classes.isNotEmpty ? classes.first['id'].toString() : null);
+    await load();
+  }
+
+  Future<void> load() async {
+    if (classId == null) { setState(() => loading = false); return; }
+    final model = context.read<AppModel>();
+    students = asMaps(await model.ask((api) => api.get('/api/v1/students?class_id=$classId')));
+    final sum = await model.ask((api) => api.get('/api/v1/classes/$classId/summary'));
+    summary = (sum as Map).map((k, v) => MapEntry(k.toString(), v));
+    if (context.mounted) setState(() => loading = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final head = (summary?['head'] as Map?) ?? {};
+    return SchoolScaffold(
+      title: 'My class',
+      school: context.watch<AppModel>().school,
+      body: loading
+          ? const Center(child: CircularProgressIndicator())
+          : ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                Text('Students ${head['students'] ?? 0}   Boys ${head['male'] ?? 0}   Girls ${head['female'] ?? 0}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+                Text('Left ${head['dropped'] ?? 0}', style: const TextStyle(fontSize: 16, color: failRed)),
+                const SizedBox(height: 8),
+                for (final s in students)
+                  Card(
+                    child: ListTile(
+                      leading: Icon(s['sex'] == 'F' ? Icons.girl : Icons.boy, size: 32, color: s['dropped_out'] == true ? failRed : leaf),
+                      title: Text(s['full_name'].toString(), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+                      subtitle: Text(s['dropped_out'] == true ? 'Left · ${s['dropout_reason'] ?? ''}' : 'Mother: ${s['mother_name'] ?? ''}'),
+                      trailing: s['dropped_out'] == true
+                          ? TextButton(onPressed: () => drop(s, false), child: const Text('Undo'))
+                          : TextButton(onPressed: () => drop(s, true), child: const Text('Left school', style: TextStyle(color: failRed))),
+                    ),
+                  ),
+              ],
+            ),
+    );
+  }
+
+  Future<void> drop(Map<String, dynamic> student, bool left) async {
+    final ok = await confirm(context, left ? 'Mark as left?' : 'Bring back?', student['full_name'].toString(), danger: left);
+    if (!ok || !context.mounted) return;
+    await context.read<AppModel>().ask((api) => api.post('/api/v1/students/${student['id']}/dropout', {'dropped': left, 'reason': left ? 'Left school' : '', 'date': '2026-11-13'}));
+    await load();
+  }
+}
+
+class FeesScreen extends StatefulWidget {
+  const FeesScreen({super.key});
+  @override
+  State<FeesScreen> createState() => _FeesScreenState();
+}
+
+class _FeesScreenState extends State<FeesScreen> {
+  List<Map<String, dynamic>> rows = [];
+  bool loading = true;
+  String? classId;
+
+  @override
+  void initState() { super.initState(); load(); }
+
+  Future<void> load() async {
+    final model = context.read<AppModel>();
+    classId = model.homerooms.isNotEmpty ? model.homerooms.first : null;
+    final path = classId == null ? '/api/v1/fees' : '/api/v1/fees?class_id=$classId';
+    rows = asMaps(await model.ask((api) => api.get(path)));
+    if (context.mounted) setState(() => loading = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SchoolScaffold(
+      title: 'Fees',
+      school: context.watch<AppModel>().school,
+      body: loading
+          ? const Center(child: CircularProgressIndicator())
+          : rows.isEmpty
+              ? const EmptyNote('No fees to show.')
+              : ListView(
+                  padding: const EdgeInsets.all(16),
+                  children: [
+                    for (final r in rows)
+                      Card(
+                        child: ListTile(
+                          title: Text(r['full_name'].toString(), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+                          subtitle: Text('Paid ${r['paid']}   Left ${r['remaining']}', style: TextStyle(fontSize: 16, color: (r['remaining'] as num? ?? 0) == 0 ? passGreen : failRed, fontWeight: FontWeight.w700)),
+                          onTap: () async {
+                            final amount = await askNumber(context, 'Amount paid', hint: r['full_name'].toString());
+                            if (amount == null || !context.mounted) return;
+                            try {
+                              await context.read<AppModel>().ask((api) => api.post('/api/v1/fees', {'student_id': r['student_id'], 'amount': amount, 'paid_on': '2026-11-13'}));
+                              await load();
+                            } on ApiException catch (e) {
+                              if (context.mounted) toast(context, e.message);
+                            }
+                          },
+                        ),
+                      ),
+                  ],
+                ),
+    );
+  }
+}

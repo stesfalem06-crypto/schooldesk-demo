@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="360" height="280" viewBox="0 0 360 280">
+  <rect width="360" height="280" rx="20" fill="#F4F1EA"/>
+  <rect x="16" y="16" width="328" height="70" rx="14" fill="#FFFFFF"/>
+  <text x="32" y="46" font-family="sans-serif" font-size="18" font-weight="700" fill="#1C2430">Abel Tesfay</text>
+  <text x="32" y="70" font-family="sans-serif" font-size="14" fill="#1C2430">Average 100   Rank 1</text>
+  <text x="250" y="58" font-family="sans-serif" font-size="16" font-weight="800" fill="#1F8A4C">Promoted</text>
+  <rect x="16" y="100" width="328" height="70" rx="14" fill="#FFFFFF"/>
+  <text x="32" y="130" font-family="sans-serif" font-size="18" font-weight="700" fill="#1C2430">Bereket Hailu</text>
+  <text x="32" y="154" font-family="sans-serif" font-size="14" fill="#1C2430">Average 90   Rank 2</text>
+  <text x="250" y="142" font-family="sans-serif" font-size="16" font-weight="800" fill="#1F8A4C">Promoted</text>
+  <rect x="16" y="184" width="328" height="70" rx="14" fill="#FFFFFF"/>
+  <text x="32" y="214" font-family="sans-serif" font-size="18" font-weight="700" fill="#1C2430">Yonatan Kibrom</text>
+  <text x="32" y="238" font-family="sans-serif" font-size="14" fill="#1C2430">Average 40   Rank 4</text>
+  <text x="270" y="226" font-family="sans-serif" font-size="16" font-weight="800" fill="#C5363A">Failed</text>
+</svg>

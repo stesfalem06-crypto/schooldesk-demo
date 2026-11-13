@@ -1,0 +1,94 @@
+name: Build
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+jobs:
+  server:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+          - goos: linux
+            goarch: arm64
+          - goos: windows
+            goarch: amd64
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+      - name: Test
+        if: matrix.goos == 'linux' && matrix.goarch == 'amd64'
+        working-directory: server
+        run: go test ./...
+      - name: Build server
+        working-directory: server
+        env:
+          CGO_ENABLED: "0"
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+        run: |
+          ext=""
+          if [ "$GOOS" = "windows" ]; then ext=".exe"; fi
+          go build -trimpath -ldflags "-s -w" -o "../dist/schooldesk-server-${GOOS}-${GOARCH}${ext}" ./cmd/schooldesk-server
+      - uses: actions/upload-artifact@v4
+        with:
+          name: server-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: dist/schooldesk-server-*
+
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - name: Release keystore
+        working-directory: app
+        run: |
+          keytool -genkeypair -v -keystore schooldesk-release.jks -storepass schooldesk -keypass schooldesk -alias schooldesk -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=SchoolDesk, OU=9 Multimedia and IT Solutions, O=9 Multimedia and IT Solutions, L=Asmara, C=ER"
+          printf 'storePassword=schooldesk\nkeyPassword=schooldesk\nkeyAlias=schooldesk\nstoreFile=../../schooldesk-release.jks\n' > android/key.properties
+      - name: Build apk
+        working-directory: app
+        run: flutter build apk --release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-apk
+          path: app/build/app/outputs/flutter-apk/app-release.apk
+
+  windows-app:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - name: Build Windows app
+        working-directory: app
+        run: flutter build windows --release
+      - name: Install Inno Setup
+        run: choco install innosetup -y
+      - name: Stage installer inputs
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force dist/windows-app | Out-Null
+          Copy-Item -Recurse app/build/windows/x64/runner/Release/* dist/windows-app/
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+      - name: Build Windows server
+        working-directory: server
+        run: |
+          $env:CGO_ENABLED="0"
+          go build -trimpath -ldflags "-s -w" -o ../dist/schooldesk-server-windows-amd64.exe ./cmd/schooldesk-server
+      - name: Compile installer
+        run: '& "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" packaging/SchoolDesk.iss'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer
+          path: dist/SchoolDesk-Setup.exe

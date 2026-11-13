@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="360" height="420" viewBox="0 0 360 420">
+  <rect width="360" height="420" rx="24" fill="#F4F1EA"/>
+  <text x="20" y="48" font-family="sans-serif" font-size="26" fill="#1C2430" font-weight="800">Mathematics</text>
+  <rect x="20" y="70" width="320" height="64" rx="14" fill="#FFFFFF"/>
+  <text x="36" y="108" font-family="sans-serif" font-size="18" fill="#1C2430">Abel Tesfay</text>
+  <text x="300" y="110" font-family="sans-serif" font-size="28" fill="#1F8A4C" font-weight="800">8</text>
+  <rect x="20" y="146" width="320" height="64" rx="14" fill="#FFFFFF"/>
+  <text x="36" y="184" font-family="sans-serif" font-size="18" fill="#1C2430">Bereket Hailu</text>
+  <text x="300" y="186" font-family="sans-serif" font-size="28" fill="#1C2430" font-weight="800">—</text>
+  <rect x="70" y="230" width="220" height="140" rx="16" fill="#FFFFFF" stroke="#0E7C66" stroke-width="3"/>
+  <text x="180" y="268" text-anchor="middle" font-family="sans-serif" font-size="32" font-weight="800" fill="#1C2430">8</text>
+  <text x="110" y="310" font-family="sans-serif" font-size="22" fill="#0E7C66">1  2  3</text>
+  <text x="110" y="342" font-family="sans-serif" font-size="22" fill="#0E7C66">4  5  6</text>
+  <rect x="0" y="380" width="360" height="40" fill="#1C2430"/>
+  <text x="180" y="404" text-anchor="middle" font-family="sans-serif" font-size="8" fill="#F4F1EA">Developed by 9 Multimedia and IT Solutions · SHAMM TESFALEM · 07162947</text>
+</svg>

@@ -1,0 +1,16 @@
+[Unit]
+Description=SchoolDesk school server
+After=network.target
+
+[Service]
+Type=simple
+User=schooldesk
+Group=schooldesk
+WorkingDirectory=/var/lib/schooldesk
+ExecStart=/opt/schooldesk/schooldesk-server --data /var/lib/schooldesk --addr :8741
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target
