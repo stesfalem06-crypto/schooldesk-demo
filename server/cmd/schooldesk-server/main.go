@@ -15,7 +15,6 @@ import (
 	"schooldesk/internal/discover"
 	"schooldesk/internal/httpapi"
 	"schooldesk/internal/license"
-	"schooldesk/internal/seed"
 	"schooldesk/internal/store"
 )
 
@@ -40,7 +39,7 @@ func main() {
 		log.Fatal(err)
 	}
 	if n == 0 {
-		if err := seed.Demo(st); err != nil {
+		if err := loadSample(st); err != nil {
 			log.Fatal(err)
 		}
 		note := filepath.Join(*data, "FIRST_LOGIN.txt")
@@ -52,7 +51,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	gate := fileGate{path: filepath.Join(*data, "licence.dat"), parts: parts}
+	gate := openGate(filepath.Join(*data, "licence.dat"), parts)
 	if err := license.PublicKeyCheck(); err != nil {
 		log.Fatal(err)
 	}

@@ -1,5 +1,6 @@
 import 'package:material_ui/material_ui.dart';
 
+import 'edition.dart';
 import 'theme.dart';
 
 class SchoolScaffold extends StatelessWidget {
@@ -37,6 +38,13 @@ class SchoolScaffold extends StatelessWidget {
                       ],
                     ),
                   ),
+                  if (demoEdition)
+                    Container(
+                      margin: const EdgeInsets.only(right: 8),
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(color: failRed, borderRadius: BorderRadius.circular(6)),
+                      child: const Text('DEMO', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 0.6)),
+                    ),
                   ...?actions,
                 ],
               ),

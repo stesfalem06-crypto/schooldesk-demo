@@ -2,6 +2,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:provider/provider.dart';
 
 import 'app_state.dart';
+import 'edition.dart';
 import 'local_server.dart';
 import 'screens.dart';
 import 'theme.dart';
@@ -14,7 +15,7 @@ Future<void> main() async {
   await model.boot();
   if (local && (model.base == null || model.base!.isEmpty)) {
     final skip = await model.vault.read('skip_local');
-    if (skip != '1') await model.setBase('http://127.0.0.1:8741');
+    if (skip != '1') await model.setBase('http://127.0.0.1:$localPort');
   }
   runApp(ChangeNotifierProvider.value(value: model, child: const SchoolApp()));
 }
@@ -25,7 +26,7 @@ class SchoolApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'SchoolDesk',
+      title: demoEdition ? 'SchoolDesk Demo' : 'SchoolDesk',
       debugShowCheckedModeBanner: false,
       theme: schoolTheme(),
       home: const Gate(),

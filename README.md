@@ -65,7 +65,7 @@ The desktop `.exe` installer is built on Windows. The steps are in [docs/windows
 
 ## Mac disk image
 
-The same workflow builds `SchoolDesk.dmg` on a Mac runner. Opening the app starts the bundled server on that Mac. How to open the unsigned app is in [docs/macos.md](docs/macos.md).
+The same workflow builds `SchoolDesk.dmg` on a Mac runner. Opening the app starts the bundled server on that Mac. How to open the unsigned app is in [docs/macos.md](docs/macos.md). A separate `macos-demo` artifact, `SchoolDesk-Demo.dmg`, loads a sample school and does not ask for an unlock code. The production builds still do.
 
 ## Android apk
 

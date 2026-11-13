@@ -4,6 +4,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 
 import 'api.dart';
 import 'app_state.dart';
+import 'edition.dart';
 import 'office.dart';
 import 'shell.dart';
 import 'theme.dart';
@@ -148,7 +149,44 @@ class _LoginScreenState extends State<LoginScreen> {
             child: Text(busy ? 'Opening…' : 'Go in'),
           ),
           if (problem != null) Text(problem!, style: const TextStyle(color: failRed, fontSize: 16)),
+          if (demoEdition) ...[
+            const SizedBox(height: 18),
+            const Text('Open a sample role', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 8),
+            _DemoRole(label: 'Admin', username: 'admin', password: 'admin1850', busy: busy, onDone: (msg) => setState(() { busy = false; problem = msg; }), onStart: () => setState(() { busy = true; problem = null; })),
+            _DemoRole(label: 'Director', username: 'director', password: 'director1850', busy: busy, onDone: (msg) => setState(() { busy = false; problem = msg; }), onStart: () => setState(() { busy = true; problem = null; })),
+            _DemoRole(label: 'Homeroom teacher', username: 'hanna', password: 'hanna1850', busy: busy, onDone: (msg) => setState(() { busy = false; problem = msg; }), onStart: () => setState(() { busy = true; problem = null; })),
+            _DemoRole(label: 'Subject teacher', username: 'meron', password: 'meron1850', busy: busy, onDone: (msg) => setState(() { busy = false; problem = msg; }), onStart: () => setState(() { busy = true; problem = null; })),
+          ],
         ],
+      ),
+    );
+  }
+}
+
+class _DemoRole extends StatelessWidget {
+  const _DemoRole({required this.label, required this.username, required this.password, required this.busy, required this.onStart, required this.onDone});
+
+  final String label;
+  final String username;
+  final String password;
+  final bool busy;
+  final VoidCallback onStart;
+  final void Function(String?) onDone;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: OutlinedButton(
+        onPressed: busy
+            ? null
+            : () async {
+                onStart();
+                final msg = await context.read<AppModel>().signIn(username, password);
+                if (context.mounted) onDone(msg);
+              },
+        child: Text(label),
       ),
     );
   }

@@ -18,3 +18,11 @@ The disk image is not signed with an Apple certificate. macOS will say it cannot
 4. If macOS still blocks it, open System Settings, go to Privacy & Security, and choose Open Anyway.
 
 The server is locked until an unlock code is entered. The lock screen shows a short computer number and a QR picture. After it is unlocked, sign in with the names in `Library/Application Support/SchoolDesk/FIRST_LOGIN.txt`.
+
+## Demo disk image
+
+`SchoolDesk-Demo.dmg` is a separate build for looking around when there is no school server. It is the `macos-demo` artifact. The production disk image is unchanged and still asks for an unlock code.
+
+Open it the same way as the school app. It starts its own server, loads a sample school, and does not ask for an unlock code. A small DEMO badge stays on the screen. On the sign-in screen, choose Admin, Director, Homeroom teacher, or Subject teacher. The sample records stay in `Library/Application Support/SchoolDesk Demo`.
+
+The office app in this disk image is built for Apple silicon. The server inside it runs on both Apple silicon and Intel.

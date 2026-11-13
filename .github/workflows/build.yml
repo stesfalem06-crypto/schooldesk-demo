@@ -222,3 +222,66 @@ jobs:
           name: macos-installer
           path: dist/SchoolDesk.dmg
           if-no-files-found: error
+
+  macos-demo:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+          cache-dependency-path: server/go.sum
+      - name: Build demo Mac app
+        working-directory: app
+        run: flutter build macos --release --dart-define=SCHOOLDESK_DEMO=true
+      - name: Build demo server
+        working-directory: server
+        run: |
+          set -euo pipefail
+          mkdir -p ../dist
+          CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -tags schooldeskdemo -trimpath -ldflags "-s -w" -o ../dist/schooldesk-server-demo-arm64 ./cmd/schooldesk-server
+          CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -tags schooldeskdemo -trimpath -ldflags "-s -w" -o ../dist/schooldesk-server-demo-amd64 ./cmd/schooldesk-server
+          lipo -create -output ../dist/schooldesk-server-demo ../dist/schooldesk-server-demo-arm64 ../dist/schooldesk-server-demo-amd64
+          lipo -info ../dist/schooldesk-server-demo
+          if strings ../dist/schooldesk-server-demo | grep -q "No unlock code is required"; then
+            echo "Demo server includes the demo unlock bypass."
+          else
+            echo "Demo server is missing the demo build."
+            exit 1
+          fi
+      - name: Bundle demo disk image
+        run: |
+          set -euo pipefail
+          app=$(find app/build/macos/Build/Products/Release -name '*.app' -maxdepth 1 | head -1)
+          if [ -z "$app" ]; then
+            echo "Demo app was not produced"
+            exit 1
+          fi
+          staged="dist/SchoolDesk-Demo.app"
+          rm -rf "$staged"
+          cp -R "$app" "$staged"
+          cp dist/schooldesk-server-demo "$staged/Contents/MacOS/schooldesk-server"
+          chmod +x "$staged/Contents/MacOS/schooldesk-server"
+          info="$staged/Contents/Info.plist"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleName SchoolDesk Demo" "$info"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier com.ninemultimedia.schooldesk.demo" "$info"
+          /usr/libexec/PlistBuddy -c "Add :CFBundleDisplayName string SchoolDesk Demo" "$info" || /usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName SchoolDesk Demo" "$info"
+          codesign --force --sign - "$staged/Contents/MacOS/schooldesk-server"
+          codesign --force --deep --sign - "$staged"
+          codesign --verify --verbose=2 "$staged"
+          exe="$staged/Contents/MacOS/schooldesk"
+          echo "Office app:"
+          lipo -info "$exe" || file "$exe"
+          echo "Bundled server:"
+          lipo -info "$staged/Contents/MacOS/schooldesk-server"
+          rm -f dist/SchoolDesk-Demo.dmg
+          hdiutil create -volname "SchoolDesk Demo" -srcfolder "$staged" -ov -format UDZO "dist/SchoolDesk-Demo.dmg"
+          test -f dist/SchoolDesk-Demo.dmg
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-demo
+          path: dist/SchoolDesk-Demo.dmg
+          if-no-files-found: error
