@@ -6,6 +6,7 @@ import 'api.dart';
 import 'app_state.dart';
 import 'edition.dart';
 import 'grades.dart';
+import 'marks_grid.dart';
 import 'timetable_page.dart';
 import 'office.dart';
 import 'shell.dart';
@@ -195,55 +196,111 @@ class _DemoRole extends StatelessWidget {
   }
 }
 
-class HomeScreen extends StatelessWidget {
+List<DeskItem> rolePages(AppModel model) {
+  if (model.seesSchool) {
+    final items = <DeskItem>[
+      const DeskItem('See fees', Icons.payments, FeesScreen()),
+      const DeskItem('See results', Icons.leaderboard, ResultsScreen()),
+      const DeskItem('Who is away', Icons.event_busy, AbsenceScreen()),
+      const DeskItem('Plan week', Icons.calendar_month, TimetableScreen()),
+    ];
+    if (model.isDirector) items.add(const DeskItem('Meetings', Icons.groups, MeetingsScreen()));
+    return items;
+  }
+  if (model.isHomeroom) {
+    return const [
+      DeskItem('My class', Icons.groups, StudentsScreen()),
+      DeskItem('Enter marks', Icons.edit, MarksScreen()),
+      DeskItem('Take fees', Icons.payments, FeesScreen()),
+      DeskItem('See results', Icons.leaderboard, ResultsScreen()),
+      DeskItem('Plan week', Icons.calendar_month, TimetableScreen()),
+    ];
+  }
+  return const [
+    DeskItem('Enter marks', Icons.edit, MarksScreen()),
+    DeskItem('My week', Icons.calendar_month, TimetableScreen()),
+  ];
+}
+
+class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  Map<String, dynamic>? dash;
+
+  @override
+  void initState() {
+    super.initState();
+    load();
+  }
+
+  Future<void> load() async {
+    final model = context.read<AppModel>();
+    if (!model.seesSchool) return;
+    try {
+      final raw = await model.ask((api) => api.get('/api/v1/dashboard'));
+      dash = (raw as Map).map((k, v) => MapEntry(k.toString(), v));
+      if (mounted) setState(() {});
+    } catch (_) {}
+  }
 
   @override
   Widget build(BuildContext context) {
     final model = context.watch<AppModel>();
-    final tiles = <Widget>[];
-    void add(IconData icon, String label, Color color, Widget page) {
-      tiles.add(BigTile(icon: icon, label: label, color: color, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => page))));
+    final items = rolePages(model);
+    final extra = <DeskItem>[];
+    if (model.isAdmin) {
+      extra.addAll(const [
+        DeskItem('Set up school', Icons.tune, SetupScreen()),
+        DeskItem('Money book', Icons.account_balance_wallet, MoneyScreen()),
+        DeskItem('Staff list', Icons.badge, StaffScreen()),
+        DeskItem('Backup', Icons.backup, BackupScreen()),
+        DeskItem('Logins', Icons.person_add, UsersScreen()),
+      ]);
+    } else if (model.isDirector) {
+      extra.add(const DeskItem('Make report', Icons.description, ReportScreen()));
     }
-    if (model.seesSchool) {
-      add(Icons.dashboard, 'School', leaf, const DashboardScreen());
-      add(Icons.payments, 'Fees', const Color(0xFFE8A317), const FeesScreen());
-      add(Icons.leaderboard, 'Results', passGreen, const ResultsScreen());
-      add(Icons.event_busy, 'Absence', failRed, const AbsenceScreen());
-      add(Icons.calendar_month, 'Week', const Color(0xFF2C6BED), const TimetableScreen());
-      add(Icons.badge, 'Staff', const Color(0xFF6A4C93), const StaffScreen());
-      add(Icons.account_balance_wallet, 'Money', leafDark, const MoneyScreen());
-      if (model.isAdmin) {
-        add(Icons.tune, 'Settings', ink, const SettingsScreen());
-        add(Icons.backup, 'Backup', const Color(0xFF2C6BED), const BackupScreen());
-        add(Icons.person_add, 'Logins', const Color(0xFF6A4C93), const UsersScreen());
-      }
-      if (model.isDirector) {
-        add(Icons.groups_2, 'Meetings', const Color(0xFF6A4C93), const MeetingsScreen());
-        add(Icons.description, 'Report', leaf, const ReportScreen());
-      }
-    } else if (model.isHomeroom) {
-      add(Icons.groups, 'My class', const Color(0xFF6A4C93), const StudentsScreen());
-      add(Icons.edit, 'Marks', leaf, const MarksScreen());
-      add(Icons.payments, 'Fees', const Color(0xFFE8A317), const FeesScreen());
-      add(Icons.leaderboard, 'Results', passGreen, const ResultsScreen());
-      add(Icons.calendar_month, 'Week', const Color(0xFF2C6BED), const TimetableScreen());
-    } else {
-      add(Icons.edit, 'Marks', leaf, const MarksScreen());
-      add(Icons.calendar_month, 'Week', const Color(0xFF2C6BED), const TimetableScreen());
-    }
+    final head = (dash?['head'] as Map?) ?? {};
+    final finance = (dash?['finance'] as Map?) ?? {};
+    final tiles = <Widget>[
+      for (final item in [...items, ...extra])
+        BigTile(icon: item.icon, label: item.label, color: leaf, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => item.page))),
+    ];
     return SchoolScaffold(
       title: model.user['display_name']?.toString() ?? 'Home',
+      hint: 'Tap a big tile. You can always come back here.',
       school: model.school,
       actions: [
         IconButton(tooltip: 'Leave', onPressed: model.signOut, icon: const Icon(Icons.logout, size: 28)),
       ],
-      body: GridView.count(
+      body: ListView(
         padding: const EdgeInsets.all(16),
-        crossAxisCount: MediaQuery.sizeOf(context).width > 700 ? 3 : 2,
-        mainAxisSpacing: 12,
-        crossAxisSpacing: 12,
-        children: tiles,
+        children: [
+          if (model.seesSchool)
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Wrap(spacing: 24, runSpacing: 8, children: [
+                  Text('Students ${head['students'] ?? '…'}', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+                  Text('Fees in ${finance['fees_collected'] ?? '…'}', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: passGreen)),
+                  Text('Still to pay ${finance['fees_remaining'] ?? '…'}', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+                  Text('Away today ${dash?['absent_today'] ?? '…'}', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: failRed)),
+                ]),
+              ),
+            ),
+          GridView.count(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            crossAxisCount: MediaQuery.sizeOf(context).width > 700 ? 3 : 2,
+            mainAxisSpacing: 12,
+            crossAxisSpacing: 12,
+            childAspectRatio: 1.15,
+            children: tiles,
+          ),
+        ],
       ),
     );
   }
@@ -288,13 +345,15 @@ class _MarksScreenState extends State<MarksScreen> {
                   : ListView(
                       padding: const EdgeInsets.all(16),
                       children: [
+                        const Text('Choose a subject. A red total means the exam is low.', style: TextStyle(fontSize: 16)),
+                        const SizedBox(height: 8),
                         for (final s in subjects)
                           Card(
                             child: ListTile(
                               leading: const Icon(Icons.menu_book, color: leaf, size: 32),
                               title: Text('${s['class_name']} · ${s['subject_name']}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
                               trailing: const Icon(Icons.chevron_right),
-                              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => AssessmentsScreen(subject: s))),
+                              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => MarkGridScreen(subject: s))),
                             ),
                           ),
                       ],
@@ -481,7 +540,13 @@ class _ScoreScreenState extends State<ScoreScreen> {
                               scores[s['id'].toString()]?['score']?.toString() ?? '—',
                               style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800, color: scores[s['id'].toString()]?['score'] == null ? ink : passGreen),
                             ),
-                            onTap: widget.subject['can_edit'] == true ? () => enter(s) : () => toast(context, 'Only the subject teacher can change this mark.'),
+                            onTap: () async {
+                        if (widget.subject['can_edit'] != true) {
+                          toast(context, 'Only the subject teacher can change this mark.');
+                          return;
+                        }
+                        await enter(s);
+                      },
                           ),
                         ),
                   ],
@@ -620,6 +685,8 @@ class _StudentsScreenState extends State<StudentsScreen> {
                 Text('Students ${head['students'] ?? 0}   Boys ${head['male'] ?? 0}   Girls ${head['female'] ?? 0}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
                 Text('Left ${head['dropped'] ?? 0}', style: const TextStyle(fontSize: 16, color: failRed)),
                 const SizedBox(height: 8),
+                FilledButton(onPressed: addStudent, child: const Text('Add a student')),
+                const SizedBox(height: 8),
                 for (final s in students)
                   Card(
                     child: ListTile(
@@ -634,6 +701,51 @@ class _StudentsScreenState extends State<StudentsScreen> {
               ],
             ),
     );
+  }
+
+  Future<void> addStudent() async {
+    if (classId == null) return;
+    final name = TextEditingController();
+    final mother = TextEditingController();
+    var sex = 'F';
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('New student'),
+        content: StatefulBuilder(builder: (context, setLocal) {
+          return Column(mainAxisSize: MainAxisSize.min, children: [
+            TextField(controller: name, decoration: const InputDecoration(labelText: 'Full name')),
+            TextField(controller: mother, decoration: const InputDecoration(labelText: 'Mother\'s name')),
+            const SizedBox(height: 8),
+            Wrap(spacing: 8, children: [
+              ChoiceChip(label: const Text('Girl'), selected: sex == 'F', onSelected: (_) => setLocal(() => sex = 'F')),
+              ChoiceChip(label: const Text('Boy'), selected: sex == 'M', onSelected: (_) => setLocal(() => sex = 'M')),
+            ]),
+          ]);
+        }),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Save')),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    if (name.text.trim().isEmpty) {
+      toast(context, 'Type the student\'s name');
+      return;
+    }
+    try {
+      await context.read<AppModel>().ask((api) => api.post('/api/v1/students', {
+            'full_name': name.text.trim(),
+            'sex': sex,
+            'mother_name': mother.text.trim(),
+            'class_id': classId,
+          }));
+      if (mounted) saved(context, 'Student added');
+      await load();
+    } on ApiException catch (e) {
+      if (mounted) toast(context, e.message);
+    }
   }
 
   Future<void> drop(Map<String, dynamic> student, bool left) async {

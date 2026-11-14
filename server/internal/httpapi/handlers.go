@@ -58,10 +58,11 @@ func (a *API) dashboard(w http.ResponseWriter, r *http.Request) {
 			promo = append(promo, st)
 		}
 	}
+	absentToday, _ := a.Store.AbsencesOn(a.now().Format("2006-01-02"))
 	a.ok(w, map[string]any{
 		"classes": len(classes), "students": len(students), "head": storeHead(students),
 		"finance": finance, "staff": staff, "promotion": promo, "semester": settings.Semester,
-		"academic_year": settings.AcademicYear,
+		"academic_year": settings.AcademicYear, "absent_today": absentToday,
 	})
 }
 

@@ -62,8 +62,33 @@ func TestRolesStayInTheirWork(t *testing.T) {
 	if err != nil || len(slots) == 0 {
 		t.Fatalf("demo timetable %d %v", len(slots), err)
 	}
-	if code := call(api, http.MethodGet, "/api/v1/summary/fees", admin, ""); code != 200 {
-		t.Fatalf("fees %d", code)
+	feeRec := httptest.NewRecorder()
+	feeReq := httptest.NewRequest(http.MethodGet, "/api/v1/summary/fees", nil)
+	feeReq.Header.Set("Authorization", "Bearer "+admin)
+	api.Handler().ServeHTTP(feeRec, feeReq)
+	if feeRec.Code != 200 || !bytes.Contains(feeRec.Body.Bytes(), []byte(`"sections"`)) {
+		t.Fatalf("fees %d %s", feeRec.Code, feeRec.Body.String())
+	}
+	dash := httptest.NewRecorder()
+	dashReq := httptest.NewRequest(http.MethodGet, "/api/v1/dashboard", nil)
+	dashReq.Header.Set("Authorization", "Bearer "+admin)
+	api.Handler().ServeHTTP(dash, dashReq)
+	if dash.Code != 200 || !bytes.Contains(dash.Body.Bytes(), []byte("absent_today")) {
+		t.Fatalf("dashboard %d %s", dash.Code, dash.Body.String())
+	}
+	if code := call(api, http.MethodPost, "/api/v1/students", samuel, `{"full_name":"New Child","sex":"F","mother_name":"Hanna","class_id":"`+classID(t, s, "Grade 8A")+`"}`); code != 200 {
+		t.Fatalf("add student %d", code)
+	}
+	if code := call(api, http.MethodPost, "/api/v1/students", meron, `{"full_name":"Nope","sex":"M","class_id":"`+classID(t, s, "Grade 8A")+`"}`); code != 403 {
+		t.Fatalf("subject teacher roster %d", code)
+	}
+	dir := login(t, api, "director", "director1850")
+	rep := httptest.NewRecorder()
+	repReq := httptest.NewRequest(http.MethodPost, "/api/v1/reports/export", bytes.NewBufferString(`{"format":"pdf","sections":["overview","fees"]}`))
+	repReq.Header.Set("Authorization", "Bearer "+dir)
+	api.Handler().ServeHTTP(rep, repReq)
+	if rep.Code != 200 || !bytes.HasPrefix(rep.Body.Bytes(), []byte("%PDF")) {
+		t.Fatalf("report %d %s", rep.Code, rep.Body.Bytes()[:min(80, rep.Body.Len())])
 	}
 	if code := call(api, http.MethodGet, "/api/v1/summary/results", admin, ""); code != 200 {
 		t.Fatalf("results %d", code)
@@ -95,6 +120,21 @@ func TestRolesStayInTheirWork(t *testing.T) {
 		t.Fatalf("samuel subjects own=%v other=%v count=%d", sawOwn, sawOther, len(subjects))
 	}
 	_ = license.Status{}
+}
+
+func classID(t *testing.T, s *store.Store, name string) string {
+	t.Helper()
+	classes, err := s.ListClasses()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range classes {
+		if c.Name == name {
+			return c.ID
+		}
+	}
+	t.Fatalf("missing %s", name)
+	return ""
 }
 
 func call(api *API, method, path, token, body string) int {

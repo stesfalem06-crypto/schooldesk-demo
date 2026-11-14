@@ -53,6 +53,7 @@ func (s *Store) readSettings(q queryer) Settings {
 		FailLimits:   domain.FailLimits{Elementary: fe, Junior: fj, High: fh},
 		BackupDir:    s.setting(q, "backup_dir", ""),
 		SampleData:   s.setting(q, "sample_data", "0") == "1",
+		GradeLabels:  s.setting(q, "grade_labels", ""),
 	}
 }
 
@@ -91,6 +92,7 @@ func (s *Store) SaveSettings(in Settings) error {
 		{"fail_high", strconv.Itoa(in.FailLimits.High)},
 		{"backup_dir", strings.TrimSpace(in.BackupDir)},
 		{"sample_data", bool01(in.SampleData)},
+		{"grade_labels", strings.TrimSpace(in.GradeLabels)},
 	}
 	tx, err := s.db.Begin()
 	if err != nil {

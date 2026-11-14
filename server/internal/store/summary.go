@@ -1,14 +1,27 @@
 package store
 
-import "schooldesk/internal/domain"
+import (
+	"strings"
 
-type GradeMoney struct {
-	Grade     int     `json:"grade"`
+	"schooldesk/internal/domain"
+)
+
+type FeeSection struct {
+	ID        string  `json:"id"`
 	Name      string  `json:"name"`
-	Classes   int     `json:"classes"`
 	Students  int     `json:"students"`
 	Collected float64 `json:"collected"`
 	Remaining float64 `json:"remaining"`
+}
+
+type GradeMoney struct {
+	Grade     int          `json:"grade"`
+	Name      string       `json:"name"`
+	Classes   int          `json:"classes"`
+	Students  int          `json:"students"`
+	Collected float64      `json:"collected"`
+	Remaining float64      `json:"remaining"`
+	Sections  []FeeSection `json:"sections"`
 }
 
 type FeeSummary struct {
@@ -63,26 +76,42 @@ func (s *Store) FeeSummary() (FeeSummary, error) {
 		return FeeSummary{}, err
 	}
 	classGrade := map[string]int{}
+	className := map[string]string{}
 	classCount := map[int]int{}
 	for _, c := range classes {
 		classGrade[c.ID] = c.Grade
+		className[c.ID] = c.Name
 		classCount[c.Grade]++
 	}
-	studentGrade := map[string]int{}
+	studentClass := map[string]string{}
 	for _, st := range students {
-		studentGrade[st.ID] = classGrade[st.ClassID]
+		studentClass[st.ID] = st.ClassID
 	}
+	labels := settings.GradeLabels
 	by := map[int]*GradeMoney{}
+	type secAt struct{ grade, index int }
+	where := map[string]secAt{}
 	var order []int
 	var out FeeSummary
 	for _, row := range rows {
-		grade := studentGrade[row.StudentID]
+		classID := studentClass[row.StudentID]
+		grade := classGrade[classID]
 		g := by[grade]
 		if g == nil {
-			g = &GradeMoney{Grade: grade, Name: gradeName(grade), Classes: classCount[grade]}
+			g = &GradeMoney{Grade: grade, Name: gradeTitle(grade, labels), Classes: classCount[grade]}
 			by[grade] = g
 			order = append(order, grade)
 		}
+		at, ok := where[classID]
+		if !ok {
+			g.Sections = append(g.Sections, FeeSection{ID: classID, Name: className[classID]})
+			at = secAt{grade, len(g.Sections) - 1}
+			where[classID] = at
+		}
+		sec := &by[at.grade].Sections[at.index]
+		sec.Students++
+		sec.Collected = domain.Round2(sec.Collected + row.Paid)
+		sec.Remaining = domain.Round2(sec.Remaining + row.Remaining)
 		g.Students++
 		g.Collected = domain.Round2(g.Collected + row.Paid)
 		g.Remaining = domain.Round2(g.Remaining + row.Remaining)
@@ -108,6 +137,7 @@ func (s *Store) StandingSummary() (StandingSummary, error) {
 	if err != nil {
 		return StandingSummary{}, err
 	}
+	labels := settings.GradeLabels
 	by := map[int]*GradeStanding{}
 	var order []int
 	var out StandingSummary
@@ -118,7 +148,7 @@ func (s *Store) StandingSummary() (StandingSummary, error) {
 		}
 		g := by[c.Grade]
 		if g == nil {
-			g = &GradeStanding{Grade: c.Grade, Name: gradeName(c.Grade)}
+			g = &GradeStanding{Grade: c.Grade, Name: gradeTitle(c.Grade, labels)}
 			by[c.Grade] = g
 			order = append(order, c.Grade)
 		}
@@ -145,7 +175,16 @@ func (s *Store) StandingSummary() (StandingSummary, error) {
 	return out, nil
 }
 
-func gradeName(grade int) string {
+func gradeTitle(grade int, labels string) string {
+	for _, line := range strings.Split(labels, "\n") {
+		parts := strings.SplitN(strings.TrimSpace(line), "=", 2)
+		if len(parts) == 2 && parts[0] == itoaSmall(grade) {
+			name := strings.TrimSpace(parts[1])
+			if name != "" {
+				return name
+			}
+		}
+	}
 	if grade <= 0 {
 		return "Grade"
 	}

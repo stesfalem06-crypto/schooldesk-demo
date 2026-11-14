@@ -42,6 +42,14 @@ type AbsenceDay struct {
 	Note       string `json:"note"`
 }
 
+func (s *Store) AbsencesOn(date string) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var n int
+	err := s.db.QueryRow(`SELECT COUNT(*) FROM absences WHERE absent_on = ?`, date).Scan(&n)
+	return n, err
+}
+
 func (s *Store) ListAbsences(year int, month int) ([]AbsenceDay, error) {
 	if month < 1 || month > 12 || year < 2000 {
 		return nil, errStr("that month is not valid")

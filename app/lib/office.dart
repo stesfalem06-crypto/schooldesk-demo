@@ -1,4 +1,7 @@
+import 'dart:io';
+
 import 'package:material_ui/material_ui.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 
 import 'api.dart';
@@ -71,14 +74,18 @@ class MoneyScreen extends StatefulWidget {
 
 class _MoneyScreenState extends State<MoneyScreen> {
   Map<String, dynamic>? finance;
+  List<Map<String, dynamic>> rows = [];
   String kind = 'incomes';
+  String query = '';
 
   @override
   void initState() { super.initState(); load(); }
 
   Future<void> load() async {
-    final raw = await context.read<AppModel>().ask((api) => api.get('/api/v1/finance'));
+    final model = context.read<AppModel>();
+    final raw = await model.ask((api) => api.get('/api/v1/finance'));
     finance = (raw as Map).map((k, v) => MapEntry(k.toString(), v));
+    rows = asMaps(await model.ask((api) => api.get('/api/v1/$kind')));
     if (context.mounted) setState(() {});
   }
 
@@ -115,6 +122,7 @@ class _MoneyScreenState extends State<MoneyScreen> {
         await model.ask((api) => api.post('/api/v1/sports', {'amount': amount, 'reason': reason.text, 'spent_on': _today()}));
       }
       await load();
+      if (context.mounted) saved(context, 'Saved');
     } on ApiException catch (e) {
       if (context.mounted) toast(context, e.message);
     }
@@ -136,9 +144,16 @@ class _MoneyScreenState extends State<MoneyScreen> {
           const SizedBox(height: 8),
           Wrap(spacing: 8, children: [
             for (final item in [('incomes', 'In'), ('expenses', 'Out'), ('workshops', 'Workshops'), ('sports', 'Sports')])
-              ChoiceChip(label: Text(item.$2), selected: kind == item.$1, onSelected: (_) => setState(() => kind = item.$1)),
+              ChoiceChip(label: Text(item.$2), selected: kind == item.$1, onSelected: (_) async { kind = item.$1; await load(); }),
           ]),
+          const SizedBox(height: 8),
+          TextField(decoration: const InputDecoration(labelText: 'Search'), onChanged: (v) => setState(() => query = v)),
           if (admin) Padding(padding: const EdgeInsets.only(top: 8), child: FilledButton(onPressed: add, child: const Text('Add'))),
+          for (final row in rows.where((r) => query.isEmpty || '${r['source'] ?? ''} ${r['reason'] ?? ''} ${r['description'] ?? ''}'.toLowerCase().contains(query.toLowerCase())))
+            Card(child: ListTile(
+              title: Text('${row['amount']}', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+              subtitle: Text('${row['source'] ?? row['reason'] ?? row['description'] ?? ''} · ${row['received_on'] ?? row['spent_on'] ?? row['attended_on'] ?? ''}', style: const TextStyle(fontSize: 16)),
+            )),
         ],
       ),
     );
@@ -166,6 +181,53 @@ class _StaffScreenState extends State<StaffScreen> {
     if (context.mounted) setState(() {});
   }
 
+  Future<void> addPerson() async {
+    final name = TextEditingController();
+    final number = TextEditingController();
+    var sex = 'F';
+    var kind = 'teaching';
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('New person'),
+        content: StatefulBuilder(builder: (context, setLocal) {
+          return Column(mainAxisSize: MainAxisSize.min, children: [
+            TextField(controller: name, decoration: const InputDecoration(labelText: 'Full name')),
+            TextField(controller: number, decoration: const InputDecoration(labelText: 'Staff number')),
+            Wrap(spacing: 8, children: [
+              ChoiceChip(label: const Text('Woman'), selected: sex == 'F', onSelected: (_) => setLocal(() => sex = 'F')),
+              ChoiceChip(label: const Text('Man'), selected: sex == 'M', onSelected: (_) => setLocal(() => sex = 'M')),
+              ChoiceChip(label: const Text('Teacher'), selected: kind == 'teaching', onSelected: (_) => setLocal(() => kind = 'teaching')),
+              ChoiceChip(label: const Text('Office'), selected: kind == 'non-teaching', onSelected: (_) => setLocal(() => kind = 'non-teaching')),
+            ]),
+          ]);
+        }),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Save')),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    if (name.text.trim().isEmpty) {
+      toast(context, 'Type the name');
+      return;
+    }
+    try {
+      await context.read<AppModel>().ask((api) => api.post('/api/v1/staff', {
+            'full_name': name.text.trim(),
+            'sex': sex,
+            'staff_type': kind,
+            'employee_id': number.text.trim(),
+            'qualification': 'diploma',
+          }));
+      if (mounted) saved(context, 'Person added');
+      await load();
+    } on ApiException catch (e) {
+      if (mounted) toast(context, e.message);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final s = stats ?? {};
@@ -177,6 +239,8 @@ class _StaffScreenState extends State<StaffScreen> {
         children: [
           Text('Teaching  boys ${s['teaching_male'] ?? 0}  girls ${s['teaching_female'] ?? 0}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
           Text('Other staff  boys ${s['non_teaching_male'] ?? 0}  girls ${s['non_teaching_female'] ?? 0}', style: const TextStyle(fontSize: 18)),
+          const SizedBox(height: 8),
+          if (context.watch<AppModel>().isAdmin) FilledButton(onPressed: addPerson, child: const Text('Add a person')),
           const SizedBox(height: 8),
           for (final p in people)
             Card(child: ListTile(
@@ -583,7 +647,11 @@ class _ReportScreenState extends State<ReportScreen> {
     setState(() => message = 'Making the ${format.toUpperCase()}…');
     try {
       final file = await context.read<AppModel>().api!.postBytes('/api/v1/reports/export', {'format': format, 'sections': chosen.toList()});
-      setState(() => message = 'Report ready (${file.length} bytes). On the school computer it downloads as school-report.$format');
+      final dir = await getApplicationDocumentsDirectory();
+      final path = '${dir.path}/SchoolDesk-report.$format';
+      await File(path).writeAsBytes(file);
+      setState(() => message = 'Saved $path');
+      if (mounted) saved(context, 'Report saved');
     } on ApiException catch (e) {
       setState(() => message = e.message);
     }
@@ -639,6 +707,125 @@ class _UsersScreenState extends State<UsersScreen> {
             }
           }, child: const Text('Add login')),
           for (final u in users) ListTile(title: Text(u['display_name'].toString(), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)), subtitle: Text('${u['username']} · ${u['role']}')),
+        ],
+      ),
+    );
+  }
+}
+
+class SetupScreen extends StatefulWidget {
+  const SetupScreen({super.key});
+  @override
+  State<SetupScreen> createState() => _SetupScreenState();
+}
+
+class _SetupScreenState extends State<SetupScreen> {
+  Map<String, dynamic> form = {};
+  List<Map<String, dynamic>> classes = [];
+  List<Map<String, dynamic>> subjects = [];
+  List<Map<String, dynamic>> staff = [];
+  bool loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    load();
+  }
+
+  Future<void> load() async {
+    final model = context.read<AppModel>();
+    final raw = await model.ask((api) => api.get('/api/v1/settings'));
+    form = (raw as Map).map((k, v) => MapEntry(k.toString(), v));
+    classes = asMaps(await model.ask((api) => api.get('/api/v1/classes')));
+    subjects = asMaps(await model.ask((api) => api.get('/api/v1/subjects')));
+    staff = asMaps(await model.ask((api) => api.get('/api/v1/staff')));
+    if (mounted) setState(() => loading = false);
+  }
+
+  Future<void> saveLabels() async {
+    try {
+      await context.read<AppModel>().ask((api) => api.put('/api/v1/settings', form));
+      if (mounted) saved(context, 'Names saved');
+    } on ApiException catch (e) {
+      if (mounted) toast(context, e.message);
+    }
+  }
+
+  Future<void> rename(Map<String, dynamic> cls) async {
+    final box = TextEditingController(text: cls['name']?.toString() ?? '');
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Section name'),
+        content: TextField(controller: box, decoration: const InputDecoration(labelText: 'Name')),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Save')),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    try {
+      await context.read<AppModel>().ask((api) => api.post('/api/v1/classes', {
+            'id': cls['id'],
+            'name': box.text.trim(),
+            'level': cls['level'],
+            'grade': cls['grade'],
+            'academic_year': cls['academic_year'],
+            'homeroom_staff_id': cls['homeroom_staff_id'],
+          }));
+      if (mounted) saved(context, 'Section renamed');
+      await load();
+    } on ApiException catch (e) {
+      if (mounted) toast(context, e.message);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (loading) return SchoolScaffold(title: 'Set up school', hint: 'Do these once.', school: context.watch<AppModel>().school, body: const Center(child: CircularProgressIndicator()));
+    final fee = (form['yearly_fee'] as num?) ?? 0;
+    final steps = [
+      (classes.isNotEmpty, 'Grades and sections'),
+      (subjects.isNotEmpty, 'Subjects'),
+      (staff.isNotEmpty, 'Teachers'),
+      (fee > 0, 'Yearly fee'),
+    ];
+    return SchoolScaffold(
+      title: 'Set up school',
+      hint: 'Tick these off before the first real day.',
+      school: context.watch<AppModel>().school,
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          for (final step in steps)
+            ListTile(
+              leading: Icon(step.$1 ? Icons.check_circle : Icons.radio_button_unchecked, color: step.$1 ? passGreen : ink, size: 32),
+              title: Text(step.$2, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
+            ),
+          const SizedBox(height: 8),
+          const Text('Grade names', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+          const Text('One line each, like 3=Year 3', style: TextStyle(fontSize: 16)),
+          TextFormField(
+            initialValue: form['grade_labels']?.toString() ?? '',
+            minLines: 3,
+            maxLines: 6,
+            decoration: const InputDecoration(labelText: 'Grade names'),
+            onChanged: (v) => form['grade_labels'] = v,
+          ),
+          const SizedBox(height: 8),
+          FilledButton(onPressed: saveLabels, child: const Text('Save grade names')),
+          const SizedBox(height: 12),
+          const Text('Sections', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+          for (final cls in classes)
+            Card(child: ListTile(
+              title: Text(cls['name'].toString(), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+              subtitle: Text('Grade ${cls['grade']} · ${cls['homeroom_name'] ?? ''}'),
+              trailing: const Icon(Icons.edit),
+              onTap: () => rename(cls),
+            )),
+          const SizedBox(height: 8),
+          OutlinedButton(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen())), child: const Text('Fees and mark parts')),
         ],
       ),
     );

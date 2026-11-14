@@ -1,18 +1,99 @@
 import 'package:material_ui/material_ui.dart';
 
+import 'package:provider/provider.dart';
+
+import 'app_state.dart';
 import 'edition.dart';
 import 'theme.dart';
 
+class DeskItem {
+  const DeskItem(this.label, this.icon, this.page);
+  final String label;
+  final IconData icon;
+  final Widget page;
+}
+
+class DeskHost extends StatefulWidget {
+  const DeskHost({super.key, required this.home, required this.pages});
+
+  final Widget home;
+  final List<DeskItem> Function(AppModel model) pages;
+
+  static DeskHostState? of(BuildContext context) => context.findAncestorStateOfType<DeskHostState>();
+
+  @override
+  State<DeskHost> createState() => DeskHostState();
+}
+
+class DeskHostState extends State<DeskHost> {
+  int index = 0;
+
+  void home() => setState(() => index = 0);
+
+  void go(int i) => setState(() => index = i);
+
+  @override
+  Widget build(BuildContext context) {
+    final model = context.watch<AppModel>();
+    final items = widget.pages(model);
+    final wide = MediaQuery.sizeOf(context).width >= 960;
+    final safeIndex = index >= items.length + 1 ? 0 : index;
+    final page = safeIndex == 0 ? widget.home : items[safeIndex - 1].page;
+    final body = Navigator(
+      key: ValueKey(safeIndex),
+      onGenerateRoute: (_) => MaterialPageRoute(builder: (_) => page),
+    );
+    if (wide) {
+      return Scaffold(
+        backgroundColor: paper,
+        body: SafeArea(
+          child: Row(children: [
+            NavigationRail(
+              backgroundColor: card,
+              selectedIndex: safeIndex,
+              onDestinationSelected: go,
+              labelType: NavigationRailLabelType.all,
+              destinations: [
+                const NavigationRailDestination(icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home), label: Text('Home')),
+                for (final item in items) NavigationRailDestination(icon: Icon(item.icon), label: Text(item.label)),
+              ],
+            ),
+            const VerticalDivider(width: 1),
+            Expanded(child: body),
+          ]),
+        ),
+      );
+    }
+    final shown = items.length > 4 ? items.sublist(0, 4) : items;
+    return Scaffold(
+      backgroundColor: paper,
+      body: SafeArea(child: body),
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: safeIndex.clamp(0, shown.length),
+        onDestinationSelected: (i) => go(i > shown.length ? 0 : i),
+        destinations: [
+          const NavigationDestination(icon: Icon(Icons.home_outlined), label: 'Home'),
+          for (final item in shown) NavigationDestination(icon: Icon(item.icon), label: item.label),
+        ],
+      ),
+    );
+  }
+}
+
 class SchoolScaffold extends StatelessWidget {
-  const SchoolScaffold({super.key, required this.title, required this.body, this.actions, this.school});
+  const SchoolScaffold({super.key, required this.title, required this.body, this.actions, this.school, this.hint});
 
   final String title;
   final String? school;
+  final String? hint;
   final Widget body;
   final List<Widget>? actions;
 
   @override
   Widget build(BuildContext context) {
+    final nav = Navigator.maybeOf(context);
+    final desk = DeskHost.of(context);
+    final canBack = (nav?.canPop() ?? false) || (desk != null && desk.index != 0);
     return Scaffold(
       backgroundColor: paper,
       body: SafeArea(
@@ -22,11 +103,25 @@ class SchoolScaffold extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(16, 12, 8, 8),
               child: Row(
                 children: [
-                  if (Navigator.canPop(context))
+                  if (canBack)
                     IconButton(
                       iconSize: 32,
-                      onPressed: () => Navigator.pop(context),
+                      tooltip: 'Back',
+                      onPressed: () {
+                        if (nav != null && nav.canPop()) {
+                          nav.pop();
+                        } else {
+                          desk?.home();
+                        }
+                      },
                       icon: const Icon(Icons.arrow_back),
+                    ),
+                  if (desk != null)
+                    IconButton(
+                      iconSize: 32,
+                      tooltip: 'Home',
+                      onPressed: desk.home,
+                      icon: const Icon(Icons.home),
                     ),
                   Expanded(
                     child: Column(
@@ -35,6 +130,8 @@ class SchoolScaffold extends StatelessWidget {
                         if ((school ?? '').isNotEmpty)
                           Text(school!, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: leaf, fontWeight: FontWeight.w800, fontSize: 14)),
                         Text(title, style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w800)),
+                        if ((hint ?? '').isNotEmpty)
+                          Text(hint!, style: const TextStyle(fontSize: 16, color: leafDark)),
                       ],
                     ),
                   ),

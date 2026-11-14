@@ -1,4 +1,7 @@
+import 'dart:io';
+
 import 'package:material_ui/material_ui.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 
 import 'api.dart';
@@ -101,6 +104,11 @@ class _GradeSummaryState extends State<GradeSummary> {
                           () => setState(() => grade = g),
                         ),
                       if (grades.isEmpty) const EmptyNote('No grades yet. Add a class first.'),
+                      if (widget.kind == 'results' && context.watch<AppModel>().isAdmin)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 8),
+                          child: FilledButton(onPressed: makeStats, child: const Text('Make statistics PDFs')),
+                        ),
                     ],
                   ],
                 ),
@@ -123,6 +131,23 @@ class _GradeSummaryState extends State<GradeSummary> {
         onTap: onTap,
       ),
     );
+  }
+
+  Future<void> makeStats() async {
+    try {
+      final model = context.read<AppModel>();
+      await model.ask((api) => api.post('/api/v1/semester/close', {}));
+      final list = asMaps(await model.ask((api) => api.get('/api/v1/reports/semester')));
+      final dir = await getApplicationDocumentsDirectory();
+      for (final item in list) {
+        final bytes = await model.api!.bytes('/api/v1/reports/semester/${item['id']}');
+        final name = (item['title'] ?? 'stats').toString().replaceAll(' ', '-');
+        await File('${dir.path}/$name.pdf').writeAsBytes(bytes);
+      }
+      if (mounted) saved(context, 'Statistics saved');
+    } on ApiException catch (e) {
+      if (mounted) toast(context, e.message);
+    }
   }
 
   Widget _feeStudent(Map<String, dynamic> row) {

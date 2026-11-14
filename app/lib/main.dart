@@ -5,6 +5,7 @@ import 'app_state.dart';
 import 'edition.dart';
 import 'local_server.dart';
 import 'screens.dart';
+import 'shell.dart';
 import 'theme.dart';
 import 'vault.dart';
 
@@ -43,6 +44,6 @@ class Gate extends StatelessWidget {
     if (model.base == null) return const ConnectScreen();
     if (!model.licensed) return const LockScreen();
     if (model.token == null || model.token!.isEmpty || model.user.isEmpty) return const LoginScreen();
-    return const HomeScreen();
+    return DeskHost(home: const HomeScreen(), pages: rolePages);
   }
 }

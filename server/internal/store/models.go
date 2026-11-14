@@ -28,6 +28,7 @@ type Settings struct {
 	FailLimits   domain.FailLimits `json:"fail_limits"`
 	BackupDir    string            `json:"backup_dir"`
 	SampleData   bool              `json:"sample_data"`
+	GradeLabels  string            `json:"grade_labels"`
 }
 
 type Staff struct {
