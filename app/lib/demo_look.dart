@@ -45,9 +45,10 @@ class DemoChrome extends StatelessWidget {
       backgroundColor: cream,
       body: SafeArea(
         child: wide
-            ? Stack(children: [
-                Padding(padding: const EdgeInsets.only(left: 108), child: child),
-                Positioned(left: 0, top: 0, bottom: 0, child: rail!),
+            ? Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                rail!,
+                const SizedBox(width: 8),
+                Expanded(child: child),
               ])
             : child,
       ),
@@ -75,10 +76,12 @@ class DemoChrome extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(12, 12, 4, 12),
       child: SoftCard(
         padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-        child: Column(children: [
-          _bit(Icons.home, 'Home', index == 0, () => onSelect(0)),
-          for (var i = 0; i < items.length; i++) _bit(items[i].icon, items[i].label, index == i + 1, () => onSelect(i + 1)),
-        ]),
+        child: SingleChildScrollView(
+          child: Column(children: [
+            _bit(Icons.home, 'Home', index == 0, () => onSelect(0)),
+            for (var i = 0; i < items.length; i++) _bit(items[i].icon, items[i].label, index == i + 1, () => onSelect(i + 1)),
+          ]),
+        ),
       ),
     );
   }
