@@ -5,7 +5,9 @@ import 'package:provider/provider.dart';
 
 import 'api.dart';
 import 'app_state.dart';
+import 'edition.dart';
 import 'saved_files.dart';
+import 'school_book.dart';
 import 'shell.dart';
 import 'theme.dart';
 import 'widgets.dart';
@@ -28,6 +30,7 @@ class _GradeSummaryState extends State<GradeSummary> {
   String? className;
   bool loading = true;
   String? error;
+  String? note;
 
   @override
   void initState() {
@@ -95,6 +98,12 @@ class _GradeSummaryState extends State<GradeSummary> {
                     ] else ...[
                       _totalCard(),
                       const SizedBox(height: 8),
+                      if (widget.kind == 'results' && context.watch<AppModel>().isAdmin)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: FilledButton(onPressed: makeStats, child: const Text('Make statistics PDFs')),
+                        ),
+                      if (note != null) Text(note!, style: const TextStyle(fontSize: 16)),
                       for (final g in grades)
                         _card(
                           g['name']?.toString() ?? 'Grade',
@@ -104,11 +113,6 @@ class _GradeSummaryState extends State<GradeSummary> {
                           () => setState(() => grade = g),
                         ),
                       if (grades.isEmpty) const EmptyNote('No grades yet. Add a class first.'),
-                      if (widget.kind == 'results' && context.watch<AppModel>().isAdmin)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 8),
-                          child: FilledButton(onPressed: makeStats, child: const Text('Make statistics PDFs')),
-                        ),
                     ],
                   ],
                 ),
@@ -134,7 +138,24 @@ class _GradeSummaryState extends State<GradeSummary> {
   }
 
   Future<void> makeStats() async {
+    setState(() => note = 'Making the statistics…');
     try {
+      if (demoEdition && Platform.environment['FLUTTER_TEST'] == 'true') {
+        final book = SchoolBook.instance;
+        book.callNow('POST', '/api/v1/semester/close', {});
+        final list = book.callNow('GET', '/api/v1/reports/semester', null) as List;
+        final dir = Directory('${Directory.systemTemp.path}/SchoolDesk/stats');
+        dir.createSync(recursive: true);
+        for (final item in list) {
+          final row = Map<String, dynamic>.from(item as Map);
+          final bytes = book.callNow('GET', '/api/v1/reports/semester/${row['id']}', null) as List<int>;
+          File('${dir.path}/${row['title']}.pdf').writeAsBytesSync(bytes);
+        }
+        if (!mounted) return;
+        setState(() => note = 'Statistics saved');
+        saved(context, 'Statistics saved');
+        return;
+      }
       final model = context.read<AppModel>();
       await model.ask((api) => api.post('/api/v1/semester/close', {}));
       final list = asMaps(await model.ask((api) => api.get('/api/v1/reports/semester')));
@@ -144,9 +165,13 @@ class _GradeSummaryState extends State<GradeSummary> {
         final name = (item['title'] ?? 'stats').toString().replaceAll(' ', '-');
         await File('${dir.path}/$name.pdf').writeAsBytes(bytes);
       }
-      if (mounted) saved(context, 'Statistics saved');
-    } on ApiException catch (e) {
-      if (mounted) toast(context, e.message);
+      if (!mounted) return;
+      setState(() => note = 'Statistics saved');
+      saved(context, 'Statistics saved');
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => note = '$e');
+      toast(context, '$e');
     }
   }
 

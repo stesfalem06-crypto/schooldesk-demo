@@ -26,12 +26,12 @@ Future<void> main() async {
       logStartup(error, stack);
       return true;
     };
+    ErrorWidget.builder = (details) {
+      logStartup(details.exception, details.stack);
+      return StartupProblem(message: 'Something went wrong while drawing this screen.', onRetry: () {});
+    };
   }
-  ErrorWidget.builder = (details) {
-    logStartup(details.exception, details.stack);
-    return StartupProblem(message: 'Something went wrong while drawing this screen.', onRetry: () {});
-  };
-  runApp(const StartupApp());
+  runApp(const RepaintBoundary(child: StartupApp()));
 }
 
 class StartupApp extends StatefulWidget {

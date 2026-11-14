@@ -30,7 +30,7 @@ class ChooseRoleScreen extends StatelessWidget {
           const SizedBox(height: 8),
           OutlinedButton(
             onPressed: () async {
-              await SchoolBook.instance.reset();
+              SchoolBook.instance.resetNow();
               if (context.mounted) saved(context, 'Sample data is new again');
             },
             child: const Text('Reset sample data'),
@@ -47,6 +47,7 @@ class ChooseRoleScreen extends StatelessWidget {
         color: const Color(0xFFFCFAF6),
         borderRadius: BorderRadius.circular(26),
         child: InkWell(
+          key: Key('role-$title'),
           borderRadius: BorderRadius.circular(26),
           onTap: () => context.read<AppModel>().enterRole(key),
           child: Padding(

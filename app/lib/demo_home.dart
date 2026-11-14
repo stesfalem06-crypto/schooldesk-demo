@@ -112,6 +112,7 @@ class _DemoHomeState extends State<DemoHome> {
       ]);
     } else if (model.isDirector) {
       items.addAll(const [
+        DeskItem('Make report', Icons.description, ReportScreen()),
         DeskItem('Notices', Icons.campaign, NoticeScreen()),
         DeskItem('Calendar', Icons.event, CalendarScreen()),
       ]);
@@ -209,6 +210,7 @@ class _DemoHomeState extends State<DemoHome> {
     const tones = [Color(0xFFD9E8F5), Color(0xFFF8E3C8), Color(0xFFDDEEDD), Color(0xFFF6D9E4), Color(0xFFE4DDF6)];
     final tone = tones[item.label.length % tones.length];
     return SizedBox(
+      key: Key('action-${item.label}'),
       width: 108,
       child: InkWell(
         onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => item.page)),

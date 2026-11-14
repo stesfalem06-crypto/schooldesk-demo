@@ -62,7 +62,11 @@ void main() {
     final saved = await again.call('GET', '/api/v1/fees?class_id=${grade8['id']}', null) as List;
     final same = saved.cast<Map>().firstWhere((row) => row['student_id'] == owing['student_id']);
     expect(same['paid'], (owing['paid'] as num) + 100);
-    await again.reset();
+    again.setActor('admin');
+    await again.call('POST', '/api/v1/timetable/generate', {});
+    final week = await again.call('GET', '/api/v1/timetable', null) as Map;
+    expect((week['slots'] as List).isNotEmpty, isTrue);
+    again.resetNow();
     again.setActor('admin');
     final fresh = await again.call('GET', '/api/v1/students', null) as List;
     expect(fresh.length, 200);

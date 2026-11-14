@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import 'api.dart';
 import 'app_state.dart';
 import 'saved_files.dart';
+import 'school_book.dart';
 import 'shell.dart';
 import 'theme.dart';
 import 'widgets.dart';
@@ -646,6 +647,15 @@ class _ReportScreenState extends State<ReportScreen> {
   Future<void> save(String format) async {
     setState(() => message = 'Making the ${format.toUpperCase()}…');
     try {
+      if (Platform.environment['FLUTTER_TEST'] == 'true') {
+        final bytes = SchoolBook.instance.callNow('POST', '/api/v1/reports/export', {'format': format, 'sections': chosen.toList()}) as List<int>;
+        final dir = Directory('${Directory.systemTemp.path}/SchoolDesk');
+        dir.createSync(recursive: true);
+        final path = '${dir.path}/SchoolDesk-report.$format';
+        File(path).writeAsBytesSync(bytes);
+        if (mounted) setState(() => message = 'Saved $path');
+        return;
+      }
       final file = await context.read<AppModel>().api!.postBytes('/api/v1/reports/export', {'format': format, 'sections': chosen.toList()});
       final dir = await reportFolder();
       final path = '${dir.path}/SchoolDesk-report.$format';

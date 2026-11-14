@@ -13,18 +13,15 @@ class SoftCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: padding,
-      decoration: BoxDecoration(
-        color: const Color(0xFFFCFAF6),
+    return Material(
+      color: const Color(0xFFFCFAF6),
+      elevation: 2,
+      shadowColor: const Color(0x140E2438),
+      shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(radius),
-        border: Border.all(color: Colors.white),
-        boxShadow: const [
-          BoxShadow(color: Color(0xFFFFFFFF), offset: Offset(-4, -4), blurRadius: 10),
-          BoxShadow(color: Color(0x140E2438), offset: Offset(8, 10), blurRadius: 18),
-        ],
+        side: const BorderSide(color: Colors.white),
       ),
-      child: child,
+      child: Padding(padding: padding, child: child),
     );
   }
 }
@@ -48,7 +45,10 @@ class DemoChrome extends StatelessWidget {
       backgroundColor: cream,
       body: SafeArea(
         child: wide
-            ? Row(children: [rail!, const SizedBox(width: 8), Expanded(child: child)])
+            ? Stack(children: [
+                Padding(padding: const EdgeInsets.only(left: 108), child: child),
+                Positioned(left: 0, top: 0, bottom: 0, child: rail!),
+              ])
             : child,
       ),
       bottomNavigationBar: wide

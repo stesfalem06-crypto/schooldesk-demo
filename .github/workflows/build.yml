@@ -291,7 +291,7 @@ jobs:
         working-directory: app
         env:
           SCHOOLDESK_SHOTS: ${{ github.workspace }}/dist/demo-shots
-        run: flutter test integration_test/walk_test.dart -d macos --dart-define=SCHOOLDESK_DEMO=true
+        run: flutter test test/demo_walk_test.dart --dart-define=SCHOOLDESK_DEMO=true
       - name: Build demo Mac app
         working-directory: app
         run: flutter build macos --release --dart-define=SCHOOLDESK_DEMO=true

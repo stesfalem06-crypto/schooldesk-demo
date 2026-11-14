@@ -19,47 +19,47 @@ class SchoolBook {
   }
 
   static Future<SchoolBook> open({String? directory}) async {
-    final dir = directory ?? await _defaultDir();
+    final dir = directory ?? _defaultDirNow();
     final book = SchoolBook(dir);
-    await book.load();
+    book.loadNow();
     _current = book;
     return book;
   }
 
-  static Future<String> _defaultDir() async {
+  static String _defaultDirNow() {
     final home = Platform.environment['HOME'] ?? '';
     final folder = Platform.isMacOS
         ? '$home/Library/Application Support/SchoolDesk Demo'
         : Platform.isWindows
             ? '${Platform.environment['LOCALAPPDATA']}\\SchoolDesk Demo'
             : '$home/.local/share/SchoolDesk Demo';
-    await Directory(folder).create(recursive: true);
+    Directory(folder).createSync(recursive: true);
     return folder;
   }
 
   File get _file => File('$directory/school.json');
 
-  Future<void> load() async {
-    if (await _file.exists()) {
+  void loadNow() {
+    if (_file.existsSync()) {
       try {
-        final decoded = jsonDecode(await _file.readAsString());
+        final decoded = jsonDecode(_file.readAsStringSync());
         if (decoded is Map && decoded['seed'] == 5) {
           state = Map<String, dynamic>.from(_norm(decoded) as Map);
           return;
         }
       } catch (_) {}
     }
-    await reset();
+    resetNow();
   }
 
-  Future<void> reset() async {
+  void resetNow() {
     state = _fresh();
-    await _save();
+    _saveNow();
   }
 
-  Future<void> _save() async {
-    await Directory(directory).create(recursive: true);
-    await _file.writeAsString(jsonEncode(state));
+  void _saveNow() {
+    Directory(directory).createSync(recursive: true);
+    _file.writeAsStringSync(jsonEncode(state));
   }
 
   String get schoolName => 'Hope Academy';
@@ -97,14 +97,16 @@ class SchoolBook {
     };
   }
 
-  Future<dynamic> call(String method, String path, Object? body) async {
+  Future<dynamic> call(String method, String path, Object? body) async => callNow(method, path, body);
+
+  dynamic callNow(String method, String path, Object? body) {
     final uri = Uri.parse('http://local$path');
     final parts = uri.pathSegments;
     final tail = parts.length < 3 ? '' : parts.sublist(2).join('/');
     final query = uri.queryParameters;
     final data = body is Map ? body.map((k, v) => MapEntry(k.toString(), v)) : <String, dynamic>{};
     final result = _route(method, tail, query, data);
-    if (method != 'GET') await _save();
+    if (method != 'GET') _saveNow();
     return result;
   }
 
@@ -1263,7 +1265,8 @@ class SchoolBook {
     if (!_isAdmin()) throw ApiException('Only the school admin can promote a class');
     final cls = _byId(_classes(), body['class_id'].toString());
     final nextGrade = (cls['grade'] as num).toInt() + 1;
-    final letter = cls['name'].toString().replaceAll(RegExp(r'[^A-Z]'), '');
+    final name = cls['name'].toString();
+    final letter = name.substring(name.length - 1);
     final next = _classes().where((c) => (c['grade'] as num).toInt() == nextGrade && c['name'].toString().endsWith(letter)).toList();
     if (next.isEmpty) throw ApiException('There is no next grade for this class');
     var moved = 0;
