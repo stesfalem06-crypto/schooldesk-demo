@@ -17,14 +17,16 @@ import 'vault.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  FlutterError.onError = (details) {
-    logStartup(details.exception, details.stack);
-    FlutterError.presentError(details);
-  };
-  PlatformDispatcher.instance.onError = (error, stack) {
-    logStartup(error, stack);
-    return true;
-  };
+  if (!Platform.environment.containsKey('FLUTTER_TEST')) {
+    FlutterError.onError = (details) {
+      logStartup(details.exception, details.stack);
+      FlutterError.presentError(details);
+    };
+    PlatformDispatcher.instance.onError = (error, stack) {
+      logStartup(error, stack);
+      return true;
+    };
+  }
   ErrorWidget.builder = (details) {
     logStartup(details.exception, details.stack);
     return StartupProblem(message: 'Something went wrong while drawing this screen.', onRetry: () {});

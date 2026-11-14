@@ -8,7 +8,6 @@ import 'package:schooldesk/main.dart' as app;
 void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
   testWidgets('every role can open its work', (tester) async {
-    await tester.binding.setSurfaceSize(const Size(1280, 800));
     app.main();
     await until(tester, find.text('Choose who you are'));
     await shot(binding, 'role-chooser');
@@ -168,6 +167,7 @@ Future<void> until(WidgetTester tester, Finder finder) async {
     await tester.pump(const Duration(milliseconds: 200));
     if (finder.evaluate().isNotEmpty) return;
   }
+  debugDumpApp();
   fail('Did not find $finder');
 }
 
