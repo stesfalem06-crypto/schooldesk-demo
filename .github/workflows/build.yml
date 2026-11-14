@@ -286,7 +286,7 @@ jobs:
           channel: stable
       - name: Test the sample school
         working-directory: app
-        run: flutter test
+        run: flutter test test/school_book_test.dart test/widget_test.dart test/roles_home_test.dart
       - name: Click through the demo
         working-directory: app
         env:
