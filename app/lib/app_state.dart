@@ -43,12 +43,23 @@ class AppModel extends ChangeNotifier {
     return base == null ? null : SchoolApi(base!, token: token);
   }
 
+  String _smokeFile() {
+    final marker = File('${SchoolBook.instance.directory}/smoke-role');
+    if (!marker.existsSync()) return '';
+    final role = marker.readAsStringSync().trim();
+    try {
+      marker.deleteSync();
+    } catch (_) {}
+    return role;
+  }
+
   Future<void> bootDemo() async {
     await SchoolBook.open();
     school = SchoolBook.instance.schoolName;
     licensed = true;
     base = 'local';
-    if (Platform.environment['SCHOOLDESK_SMOKE'] == 'admin') enterRole('admin');
+    final smoke = Platform.environment['SCHOOLDESK_SMOKE'] ?? _smokeFile();
+    if (smoke == 'admin' || smoke == 'director' || smoke == 'homeroom' || smoke == 'subject') enterRole(smoke);
     notifyListeners();
   }
 

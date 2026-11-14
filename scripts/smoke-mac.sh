@@ -96,7 +96,9 @@ if [[ "$MODE" == "desk" || "$MODE" == "demo" ]]; then
   fi
   killall schooldesk || true
   sleep 2
-  SCHOOLDESK_SMOKE=admin "$APP/Contents/MacOS/schooldesk" >/tmp/schooldesk-smoke.log 2>&1 &
+  mkdir -p "$HOME/Library/Application Support/SchoolDesk Demo"
+  printf 'admin' > "$HOME/Library/Application Support/SchoolDesk Demo/smoke-role"
+  open "$APP"
   HOME_SHOT="${SHOT%.png}-home.png"
   HOME_TEXT=""
   for _ in $(seq 1 25); do
