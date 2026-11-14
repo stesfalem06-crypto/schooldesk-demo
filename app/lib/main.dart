@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:ui';
 
 import 'package:material_ui/material_ui.dart';
@@ -59,6 +60,9 @@ class _StartupAppState extends State<StartupApp> {
       await next.boot();
       if (demoEdition && server == LocalServer.ready) {
         await next.setBase('http://127.0.0.1:$localPort');
+        if (Platform.environment['SCHOOLDESK_SMOKE'] == 'admin') {
+          await next.signIn('admin', 'admin1850');
+        }
       } else if (server == LocalServer.ready && (next.base == null || next.base!.isEmpty)) {
         final skip = await next.vault.read('skip_local');
         if (skip != '1') await next.setBase('http://127.0.0.1:$localPort');

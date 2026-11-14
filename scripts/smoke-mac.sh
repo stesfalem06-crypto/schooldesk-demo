@@ -76,15 +76,45 @@ if [[ "$MODE" == "demo" ]]; then
     echo "demo did not show the sign-in screen"
     exit 1
   fi
-  swift "$ROOT/scripts/mac_ui.swift" click Admin
-  sleep 4
+  killall schooldesk || true
+  sleep 2
+  SCHOOLDESK_SMOKE=admin "$APP/Contents/MacOS/schooldesk" >/tmp/schooldesk-smoke.log 2>&1 &
   HOME_SHOT="${SHOT%.png}-home.png"
-  screencapture -x -l "$WID" "$HOME_SHOT"
+  HOME_TEXT=""
+  for _ in $(seq 1 25); do
+    sleep 1
+    WID="$(swift -e 'import CoreGraphics
+import Foundation
+let info = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]] ?? []
+for w in info {
+  let owner = (w[kCGWindowOwnerName as String] as? String) ?? ""
+  if owner.lowercased().contains("school") {
+    print(w[kCGWindowNumber as String] ?? "")
+    break
+  }
+}')" || true
+    WID="$(printf '%s' "$WID" | tr -d '[:space:]')"
+    if [[ -z "$WID" ]]; then
+      continue
+    fi
+    screencapture -x -l "$WID" "$HOME_SHOT" || true
+    if [[ ! -f "$HOME_SHOT" ]]; then
+      continue
+    fi
+    HOME_TEXT="$(swift "$ROOT/scripts/mac_ui.swift" ocr "$HOME_SHOT" || true)"
+    if printf '%s\n' "$HOME_TEXT" | grep -q "Unlock"; then
+      echo "unlock screen appeared after sign-in"
+      printf '%s\n' "$HOME_TEXT"
+      exit 1
+    fi
+    if printf '%s\n' "$HOME_TEXT" | grep -q "See fees"; then
+      break
+    fi
+  done
+  printf '%s\n' "$HOME_TEXT"
   HOME_BMP="${HOME_SHOT%.png}.bmp"
   sips -s format bmp "$HOME_SHOT" --out "$HOME_BMP" >/dev/null
   python3 "$ROOT/scripts/not_blank.py" "$HOME_BMP"
-  HOME_TEXT="$(swift "$ROOT/scripts/mac_ui.swift" ocr "$HOME_SHOT")"
-  printf '%s\n' "$HOME_TEXT"
   if printf '%s\n' "$HOME_TEXT" | grep -q "Unlock"; then
     echo "unlock screen appeared after sign-in"
     exit 1
