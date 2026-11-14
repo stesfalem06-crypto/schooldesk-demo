@@ -19,7 +19,7 @@ rm -rf "$DEST/SchoolDesk Demo.app"
 cp -R "$APP" "$DEST/SchoolDesk Demo.app"
 xattr -w com.apple.quarantine "0083;$(date +%s);Google Drive;00000000-0000-0000-0000-000000000000" "$DEST/SchoolDesk Demo.app" || true
 echo "Open while quarantine is still set:" | tee -a "$REPORT"
-if open "$DEST/SchoolDesk Demo.app"; then
+if python3 -c 'import subprocess,sys; subprocess.run(["open", sys.argv[1]], timeout=20)' "$DEST/SchoolDesk Demo.app"; then
   sleep 3
   if pgrep -x schooldesk >/dev/null; then
     echo "The app process started even with quarantine. Gatekeeper may be off on this machine." | tee -a "$REPORT"
@@ -28,7 +28,7 @@ if open "$DEST/SchoolDesk Demo.app"; then
     echo "open returned, but the app did not stay open. macOS is holding it for Privacy and Security." | tee -a "$REPORT"
   fi
 else
-  echo "open failed while the quarantine attribute was set." | tee -a "$REPORT"
+  echo "open did not finish while the quarantine attribute was set. On the owner's Mac this is the Privacy and Security prompt." | tee -a "$REPORT"
 fi
 killall schooldesk || true
 echo "Removing quarantine and opening again." | tee -a "$REPORT"

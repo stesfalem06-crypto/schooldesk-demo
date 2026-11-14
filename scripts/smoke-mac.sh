@@ -6,7 +6,7 @@ SHOT="$3"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 MODE="${4:-check}"
 xattr -cr "$APP" || true
-open "$APP"
+python3 -c 'import subprocess,sys; subprocess.run(["open", sys.argv[1]], timeout=20)' "$APP" || true
 if [[ "$MODE" == "desk" ]]; then
   alive=1
 else
