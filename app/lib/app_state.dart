@@ -4,6 +4,7 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 
 import 'api.dart';
+import 'startup_log.dart';
 import 'vault.dart';
 
 class AppModel extends ChangeNotifier {
@@ -106,6 +107,10 @@ class AppModel extends ChangeNotifier {
     } on ApiException catch (e) {
       error = e.message;
       licensed = false;
+    } catch (problem, stack) {
+      error = 'The school computer did not answer';
+      licensed = false;
+      await logStartup(problem, stack);
     }
   }
 

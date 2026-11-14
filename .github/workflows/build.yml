@@ -142,6 +142,49 @@ jobs:
           if (-not (Test-Path dist\schooldesk-server-windows-amd64.exe)) {
             throw "Windows server exe is missing"
           }
+          Copy-Item dist\schooldesk-server-windows-amd64.exe (Join-Path $release 'schooldesk-server.exe') -Force
+          $proc = Start-Process -FilePath $exe.FullName -PassThru
+          Start-Sleep -Seconds 15
+          if ($proc.HasExited) { throw "Windows app exited $($proc.ExitCode)" }
+          $ready = $false
+          foreach ($i in 1..10) {
+            try {
+              $res = Invoke-WebRequest -UseBasicParsing http://127.0.0.1:8741/api/v1/health -TimeoutSec 2
+              if ($res.StatusCode -eq 200) { $ready = $true; break }
+            } catch {}
+            Start-Sleep -Seconds 1
+          }
+          if (-not $ready) { throw "Windows server did not answer" }
+          Add-Type -AssemblyName System.Windows.Forms,System.Drawing
+          $bounds = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+          $bmp = New-Object System.Drawing.Bitmap $bounds.Width, $bounds.Height
+          $g = [System.Drawing.Graphics]::FromImage($bmp)
+          $g.CopyFromScreen($bounds.Location, [System.Drawing.Point]::Empty, $bounds.Size)
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          $bmp.Save((Join-Path (Get-Location) 'dist\windows-smoke.png'))
+          Stop-Process -Id $proc.Id -Force
+      - name: Check the Windows window is not blank
+        shell: pwsh
+        run: |
+          Add-Type -AssemblyName System.Drawing
+          $bmp = [System.Drawing.Bitmap]::FromFile((Resolve-Path dist\windows-smoke.png))
+          $step = [Math]::Max(1, [int]($bmp.Width / 40))
+          $sum = 0.0
+          $sum2 = 0.0
+          $n = 0
+          for ($y = 0; $y -lt $bmp.Height; $y += $step) {
+            for ($x = 0; $x -lt $bmp.Width; $x += $step) {
+              $c = $bmp.GetPixel($x, $y)
+              $l = (0.3 * $c.R) + (0.59 * $c.G) + (0.11 * $c.B)
+              $sum += $l
+              $sum2 += ($l * $l)
+              $n++
+            }
+          }
+          $mean = $sum / $n
+          $var = ($sum2 / $n) - ($mean * $mean)
+          Write-Host "windows screenshot variance $var"
+          if ($var -lt 40) { throw "screenshot is mostly one colour" }
       - name: Install Inno Setup
         shell: pwsh
         run: |
@@ -210,10 +253,16 @@ jobs:
           cp -R "$app" "$staged"
           cp dist/schooldesk-server-darwin "$staged/Contents/MacOS/schooldesk-server"
           chmod +x "$staged/Contents/MacOS/schooldesk-server"
-          codesign --force --sign - "$staged/Contents/MacOS/schooldesk-server"
-          codesign --force --deep --sign - "$staged"
+          xattr -cr "$staged" || true
+          while IFS= read -r -d '' bin; do
+            if file "$bin" | grep -q 'Mach-O'; then
+              codesign --force --sign - "$bin"
+            fi
+          done < <(find "$staged/Contents" -type f -print0)
+          codesign --force --sign - --entitlements app/macos/Runner/Release.entitlements "$staged"
           codesign --verify --verbose=2 "$staged"
           lipo -info "$staged/Contents/MacOS/schooldesk-server"
+          bash scripts/smoke-mac.sh "$PWD/$staged" 8741 "$PWD/dist/macos-smoke.png"
           rm -f dist/SchoolDesk.dmg
           hdiutil create -volname "SchoolDesk" -srcfolder "$staged" -ov -format UDZO "dist/SchoolDesk.dmg"
           test -f dist/SchoolDesk.dmg
@@ -221,6 +270,11 @@ jobs:
         with:
           name: macos-installer
           path: dist/SchoolDesk.dmg
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-smoke
+          path: dist/macos-smoke.png
           if-no-files-found: error
 
   macos-demo:
@@ -268,14 +322,20 @@ jobs:
           /usr/libexec/PlistBuddy -c "Set :CFBundleName SchoolDesk Demo" "$info"
           /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier com.ninemultimedia.schooldesk.demo" "$info"
           /usr/libexec/PlistBuddy -c "Add :CFBundleDisplayName string SchoolDesk Demo" "$info" || /usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName SchoolDesk Demo" "$info"
-          codesign --force --sign - "$staged/Contents/MacOS/schooldesk-server"
-          codesign --force --deep --sign - "$staged"
+          xattr -cr "$staged" || true
+          while IFS= read -r -d '' bin; do
+            if file "$bin" | grep -q 'Mach-O'; then
+              codesign --force --sign - "$bin"
+            fi
+          done < <(find "$staged/Contents" -type f -print0)
+          codesign --force --sign - --entitlements app/macos/Runner/Release.entitlements "$staged"
           codesign --verify --verbose=2 "$staged"
           exe="$staged/Contents/MacOS/schooldesk"
           echo "Office app:"
           lipo -info "$exe" || file "$exe"
           echo "Bundled server:"
           lipo -info "$staged/Contents/MacOS/schooldesk-server"
+          bash scripts/smoke-mac.sh "$PWD/$staged" 8742 "$PWD/dist/macos-demo-smoke.png"
           rm -f dist/SchoolDesk-Demo.dmg
           hdiutil create -volname "SchoolDesk Demo" -srcfolder "$staged" -ov -format UDZO "dist/SchoolDesk-Demo.dmg"
           test -f dist/SchoolDesk-Demo.dmg
@@ -283,4 +343,9 @@ jobs:
         with:
           name: macos-demo
           path: dist/SchoolDesk-Demo.dmg
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-demo-smoke
+          path: dist/macos-demo-smoke.png
           if-no-files-found: error

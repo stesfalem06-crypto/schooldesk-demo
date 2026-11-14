@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:material_ui/material_ui.dart';
 import 'package:provider/provider.dart';
 
@@ -6,19 +8,122 @@ import 'edition.dart';
 import 'local_server.dart';
 import 'screens.dart';
 import 'shell.dart';
+import 'startup_log.dart';
 import 'theme.dart';
 import 'vault.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  final local = await startBundledServer();
-  final model = AppModel(Vault());
-  await model.boot();
-  if (local && (model.base == null || model.base!.isEmpty)) {
-    final skip = await model.vault.read('skip_local');
-    if (skip != '1') await model.setBase('http://127.0.0.1:$localPort');
+  FlutterError.onError = (details) {
+    logStartup(details.exception, details.stack);
+    FlutterError.presentError(details);
+  };
+  PlatformDispatcher.instance.onError = (error, stack) {
+    logStartup(error, stack);
+    return true;
+  };
+  ErrorWidget.builder = (details) {
+    logStartup(details.exception, details.stack);
+    return StartupProblem(message: 'Something went wrong while drawing this screen.', onRetry: () {});
+  };
+  runApp(const StartupApp());
+}
+
+class StartupApp extends StatefulWidget {
+  const StartupApp({super.key});
+
+  @override
+  State<StartupApp> createState() => _StartupAppState();
+}
+
+class _StartupAppState extends State<StartupApp> {
+  AppModel? model;
+  String? problem;
+  bool starting = true;
+
+  @override
+  void initState() {
+    super.initState();
+    boot();
   }
-  runApp(ChangeNotifierProvider.value(value: model, child: const SchoolApp()));
+
+  Future<void> boot() async {
+    setState(() { starting = true; problem = null; });
+    try {
+      var server = await startBundledServer();
+      if (server == LocalServer.notReady) {
+        await Future<void>.delayed(const Duration(seconds: 2));
+        server = await startBundledServer();
+      }
+      final next = AppModel(Vault());
+      await next.boot();
+      if (server == LocalServer.ready && (next.base == null || next.base!.isEmpty)) {
+        final skip = await next.vault.read('skip_local');
+        if (skip != '1') await next.setBase('http://127.0.0.1:$localPort');
+      }
+      if (server == LocalServer.notReady) {
+        setState(() { starting = false; problem = 'The school program on this computer is still starting.'; model = next; });
+        return;
+      }
+      setState(() { model = next; starting = false; problem = null; });
+    } catch (error, stack) {
+      await logStartup(error, stack);
+      if (mounted) setState(() { starting = false; problem = 'SchoolDesk could not open. The details are in the startup log.'; });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (problem != null && model == null) {
+      return MaterialApp(theme: schoolTheme(), home: StartupProblem(message: problem!, onRetry: boot));
+    }
+    if (starting || model == null) {
+      return MaterialApp(theme: schoolTheme(), home: const StartingScreen());
+    }
+    if (problem != null) {
+      return MaterialApp(theme: schoolTheme(), home: StartupProblem(message: problem!, onRetry: boot));
+    }
+    return ChangeNotifierProvider.value(value: model!, child: const SchoolApp());
+  }
+}
+
+class StartingScreen extends StatelessWidget {
+  const StartingScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const SchoolScaffold(
+      title: 'Starting…',
+      hint: 'The school program on this computer is opening.',
+      body: Center(child: CircularProgressIndicator()),
+    );
+  }
+}
+
+class StartupProblem extends StatelessWidget {
+  const StartupProblem({super.key, required this.message, required this.onRetry});
+
+  final String message;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return SchoolScaffold(
+      title: 'Could not open',
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            const Icon(Icons.error_outline, color: failRed, size: 48),
+            const SizedBox(height: 12),
+            Text(message, textAlign: TextAlign.center, style: const TextStyle(fontSize: 18)),
+            const SizedBox(height: 16),
+            FilledButton(onPressed: onRetry, child: const Text('Retry')),
+          ]),
+        ),
+      ),
+    );
+  }
 }
 
 class SchoolApp extends StatelessWidget {

@@ -28,7 +28,11 @@ class DeskHost extends StatefulWidget {
 class DeskHostState extends State<DeskHost> {
   int index = 0;
 
-  void home() => setState(() => index = 0);
+  void home() {
+    setState(() => index = 0);
+    final nav = Navigator.maybeOf(context);
+    if (nav != null && nav.canPop()) nav.popUntil((route) => route.isFirst);
+  }
 
   void go(int i) => setState(() => index = i);
 
@@ -39,10 +43,6 @@ class DeskHostState extends State<DeskHost> {
     final wide = MediaQuery.sizeOf(context).width >= 960;
     final safeIndex = index >= items.length + 1 ? 0 : index;
     final page = safeIndex == 0 ? widget.home : items[safeIndex - 1].page;
-    final body = Navigator(
-      key: ValueKey(safeIndex),
-      onGenerateRoute: (_) => MaterialPageRoute(builder: (_) => page),
-    );
     if (wide) {
       return Scaffold(
         backgroundColor: paper,
@@ -59,7 +59,7 @@ class DeskHostState extends State<DeskHost> {
               ],
             ),
             const VerticalDivider(width: 1),
-            Expanded(child: body),
+            Expanded(child: page),
           ]),
         ),
       );
@@ -67,9 +67,9 @@ class DeskHostState extends State<DeskHost> {
     final shown = items.length > 4 ? items.sublist(0, 4) : items;
     return Scaffold(
       backgroundColor: paper,
-      body: SafeArea(child: body),
+      body: SafeArea(child: page),
       bottomNavigationBar: NavigationBar(
-        selectedIndex: safeIndex.clamp(0, shown.length),
+        selectedIndex: safeIndex > shown.length ? 0 : safeIndex,
         onDestinationSelected: (i) => go(i > shown.length ? 0 : i),
         destinations: [
           const NavigationDestination(icon: Icon(Icons.home_outlined), label: 'Home'),
