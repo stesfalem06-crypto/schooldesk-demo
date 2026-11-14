@@ -27,10 +27,7 @@ type demoGate struct {
 }
 
 func (g demoGate) Current(now time.Time) (license.Status, error) {
-	st, err := g.fileGate.Current(now)
-	if err != nil {
-		return st, err
-	}
+	st, _ := g.fileGate.Current(now)
 	st.Licensed = true
 	st.Expired = false
 	st.ClockProblem = false

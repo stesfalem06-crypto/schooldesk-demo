@@ -262,7 +262,7 @@ jobs:
           codesign --force --sign - --entitlements app/macos/Runner/Release.entitlements "$staged"
           codesign --verify --verbose=2 "$staged"
           lipo -info "$staged/Contents/MacOS/schooldesk-server"
-          bash scripts/smoke-mac.sh "$PWD/$staged" 8741 "$PWD/dist/macos-smoke.png"
+          bash scripts/smoke-mac.sh "$PWD/$staged" 8741 "$PWD/dist/macos-smoke.png" prod
           rm -f dist/SchoolDesk.dmg
           hdiutil create -volname "SchoolDesk" -srcfolder "$staged" -ov -format UDZO "dist/SchoolDesk.dmg"
           test -f dist/SchoolDesk.dmg
@@ -335,7 +335,7 @@ jobs:
           lipo -info "$exe" || file "$exe"
           echo "Bundled server:"
           lipo -info "$staged/Contents/MacOS/schooldesk-server"
-          bash scripts/smoke-mac.sh "$PWD/$staged" 8742 "$PWD/dist/macos-demo-smoke.png"
+          bash scripts/smoke-mac.sh "$PWD/$staged" 8742 "$PWD/dist/macos-demo-smoke.png" demo
           rm -f dist/SchoolDesk-Demo.dmg
           hdiutil create -volname "SchoolDesk Demo" -srcfolder "$staged" -ov -format UDZO "dist/SchoolDesk-Demo.dmg"
           test -f dist/SchoolDesk-Demo.dmg
@@ -347,5 +347,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: macos-demo-smoke
-          path: dist/macos-demo-smoke.png
+          path: |
+            dist/macos-demo-smoke.png
+            dist/macos-demo-smoke-home.png
           if-no-files-found: error

@@ -13,6 +13,7 @@ import (
 	"github.com/skip2/go-qrcode"
 
 	"schooldesk/internal/auth"
+	"schooldesk/internal/buildinfo"
 	"schooldesk/internal/license"
 	"schooldesk/internal/store"
 )
@@ -283,7 +284,7 @@ func viewLicense(st license.Status) licenseView {
 
 func (a *API) health(w http.ResponseWriter, r *http.Request) {
 	st, _ := a.Gate.Current(a.now())
-	a.ok(w, map[string]any{"ok": true, "product": "SchoolDesk", "licensed": st.Licensed, "school_name": st.SchoolName})
+	a.ok(w, map[string]any{"ok": true, "product": "SchoolDesk", "licensed": st.Licensed, "school_name": st.SchoolName, "demo": buildinfo.IsDemo()})
 }
 
 func (a *API) licenseStatus(w http.ResponseWriter, r *http.Request) {

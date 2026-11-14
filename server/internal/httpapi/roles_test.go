@@ -76,6 +76,12 @@ func TestRolesStayInTheirWork(t *testing.T) {
 	if dash.Code != 200 || !bytes.Contains(dash.Body.Bytes(), []byte("absent_today")) {
 		t.Fatalf("dashboard %d %s", dash.Code, dash.Body.String())
 	}
+	health := httptest.NewRecorder()
+	healthReq := httptest.NewRequest(http.MethodGet, "/api/v1/health", nil)
+	api.Handler().ServeHTTP(health, healthReq)
+	if health.Code != 200 || !bytes.Contains(health.Body.Bytes(), []byte(`"demo":false`)) {
+		t.Fatalf("health %d %s", health.Code, health.Body.String())
+	}
 	if code := call(api, http.MethodPost, "/api/v1/students", samuel, `{"full_name":"New Child","sex":"F","mother_name":"Hanna","class_id":"`+classID(t, s, "Grade 8A")+`"}`); code != 200 {
 		t.Fatalf("add student %d", code)
 	}

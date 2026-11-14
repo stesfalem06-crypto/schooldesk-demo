@@ -57,12 +57,18 @@ class _StartupAppState extends State<StartupApp> {
       }
       final next = AppModel(Vault());
       await next.boot();
-      if (server == LocalServer.ready && (next.base == null || next.base!.isEmpty)) {
+      if (demoEdition && server == LocalServer.ready) {
+        await next.setBase('http://127.0.0.1:$localPort');
+      } else if (server == LocalServer.ready && (next.base == null || next.base!.isEmpty)) {
         final skip = await next.vault.read('skip_local');
         if (skip != '1') await next.setBase('http://127.0.0.1:$localPort');
       }
-      if (server == LocalServer.notReady) {
-        setState(() { starting = false; problem = 'The school program on this computer is still starting.'; model = next; });
+      if (demoEdition && (server != LocalServer.ready || !next.licensed)) {
+        setState(() {
+          starting = false;
+          model = null;
+          problem = 'The demo school is still starting. It does not need an unlock code.';
+        });
         return;
       }
       setState(() { model = next; starting = false; problem = null; });
@@ -147,7 +153,7 @@ class Gate extends StatelessWidget {
   Widget build(BuildContext context) {
     final model = context.watch<AppModel>();
     if (model.base == null) return const ConnectScreen();
-    if (!model.licensed) return const LockScreen();
+    if (!demoEdition && !model.licensed) return const LockScreen();
     if (model.token == null || model.token!.isEmpty || model.user.isEmpty) return const LoginScreen();
     return DeskHost(home: const HomeScreen(), pages: rolePages);
   }
