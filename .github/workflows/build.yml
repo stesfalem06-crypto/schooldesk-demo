@@ -284,27 +284,17 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
-      - uses: actions/setup-go@v5
-        with:
-          go-version: "1.22"
-          cache-dependency-path: server/go.sum
+      - name: Test the sample school
+        working-directory: app
+        run: flutter test
+      - name: Click through the demo
+        working-directory: app
+        env:
+          SCHOOLDESK_SHOTS: ${{ github.workspace }}/dist/demo-shots
+        run: flutter test integration_test/walk_test.dart -d macos --dart-define=SCHOOLDESK_DEMO=true
       - name: Build demo Mac app
         working-directory: app
         run: flutter build macos --release --dart-define=SCHOOLDESK_DEMO=true
-      - name: Build demo server
-        working-directory: server
-        run: |
-          set -euo pipefail
-          mkdir -p ../dist
-          CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -tags schooldeskdemo -trimpath -ldflags "-s -w" -o ../dist/schooldesk-server-demo-arm64 ./cmd/schooldesk-server
-          CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -tags schooldeskdemo -trimpath -ldflags "-s -w" -o ../dist/schooldesk-server-demo-amd64 ./cmd/schooldesk-server
-          lipo -create -output ../dist/schooldesk-server-demo ../dist/schooldesk-server-demo-arm64 ../dist/schooldesk-server-demo-amd64
-          lipo -info ../dist/schooldesk-server-demo
-          if ! grep -a -q "No unlock code is required" ../dist/schooldesk-server-demo; then
-            echo "Demo server is missing the demo build."
-            exit 1
-          fi
-          echo "Demo server includes the demo unlock bypass."
       - name: Bundle demo disk image
         run: |
           set -euo pipefail
@@ -314,30 +304,40 @@ jobs:
             exit 1
           fi
           staged="dist/SchoolDesk-Demo.app"
-          rm -rf "$staged"
+          rm -rf "$staged" dist/dmg
+          mkdir -p dist/dmg
           cp -R "$app" "$staged"
-          cp dist/schooldesk-server-demo "$staged/Contents/MacOS/schooldesk-server"
-          chmod +x "$staged/Contents/MacOS/schooldesk-server"
           info="$staged/Contents/Info.plist"
           /usr/libexec/PlistBuddy -c "Set :CFBundleName SchoolDesk Demo" "$info"
           /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier com.ninemultimedia.schooldesk.demo" "$info"
           /usr/libexec/PlistBuddy -c "Add :CFBundleDisplayName string SchoolDesk Demo" "$info" || /usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName SchoolDesk Demo" "$info"
+          /usr/libexec/PlistBuddy -c "Set :LSMinimumSystemVersion 11.0" "$info" || /usr/libexec/PlistBuddy -c "Add :LSMinimumSystemVersion string 11.0" "$info"
+          if [ -e "$staged/Contents/MacOS/schooldesk-server" ]; then
+            echo "The demo must not ship a server"
+            exit 1
+          fi
           xattr -cr "$staged" || true
           while IFS= read -r -d '' bin; do
             if file "$bin" | grep -q 'Mach-O'; then
-              codesign --force --sign - "$bin"
+              codesign --force --options runtime --sign - "$bin"
             fi
           done < <(find "$staged/Contents" -type f -print0)
-          codesign --force --sign - --entitlements app/macos/Runner/Release.entitlements "$staged"
-          codesign --verify --verbose=2 "$staged"
-          exe="$staged/Contents/MacOS/schooldesk"
-          echo "Office app:"
-          lipo -info "$exe" || file "$exe"
-          echo "Bundled server:"
-          lipo -info "$staged/Contents/MacOS/schooldesk-server"
-          bash scripts/smoke-mac.sh "$PWD/$staged" 8742 "$PWD/dist/macos-demo-smoke.png" demo
+          codesign --force --deep --options runtime --sign - --entitlements app/macos/Runner/Demo.entitlements "$staged"
+          codesign --verify --deep --strict --verbose=2 "$staged"
+          lipo -info "$staged/Contents/MacOS/schooldesk" || file "$staged/Contents/MacOS/schooldesk"
+          bash scripts/quarantine-mac.sh "$PWD/$staged" "$PWD/dist/gatekeeper.txt"
+          bash scripts/smoke-mac.sh "$PWD/$staged" 0 "$PWD/dist/macos-demo-smoke.png" desk
+          cp -R "$staged" "dist/dmg/SchoolDesk Demo.app"
+          cp "packaging/Open SchoolDesk Demo.command" "dist/dmg/Open SchoolDesk Demo.command"
+          chmod +x "dist/dmg/Open SchoolDesk Demo.command"
           rm -f dist/SchoolDesk-Demo.dmg
-          hdiutil create -volname "SchoolDesk Demo" -srcfolder "$staged" -ov -format UDZO "dist/SchoolDesk-Demo.dmg"
+          hdiutil create -volname "SchoolDesk Demo" -srcfolder dist/dmg -ov -format UDZO "dist/SchoolDesk-Demo.dmg"
+          xattr -w com.apple.quarantine "0083;$(date +%s);Google Drive;00000000-0000-0000-0000-000000000000" dist/SchoolDesk-Demo.dmg || true
+          rm -rf /tmp/sd-mount
+          mkdir -p /tmp/sd-mount
+          hdiutil attach dist/SchoolDesk-Demo.dmg -mountpoint /tmp/sd-mount -nobrowse
+          echo "Mounted disk image. Quarantine on the image does not by itself clear the copy." | tee -a dist/gatekeeper.txt
+          hdiutil detach /tmp/sd-mount || true
           test -f dist/SchoolDesk-Demo.dmg
       - uses: actions/upload-artifact@v4
         with:
@@ -350,4 +350,6 @@ jobs:
           path: |
             dist/macos-demo-smoke.png
             dist/macos-demo-smoke-home.png
+            dist/demo-shots
+            dist/gatekeeper.txt
           if-no-files-found: error

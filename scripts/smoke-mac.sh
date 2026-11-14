@@ -4,8 +4,12 @@ APP="$1"
 PORT="$2"
 SHOT="$3"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+MODE="${4:-check}"
 xattr -cr "$APP" || true
 open "$APP"
+if [[ "$MODE" == "desk" ]]; then
+  alive=1
+else
 alive=0
 for _ in $(seq 1 20); do
   if curl -fsS "http://127.0.0.1:${PORT}/api/v1/health" >/dev/null; then
@@ -20,7 +24,6 @@ if [[ "$alive" != 1 ]]; then
 fi
 HEALTH="$(curl -fsS "http://127.0.0.1:${PORT}/api/v1/health")"
 echo "$HEALTH"
-MODE="${4:-check}"
 if [[ "$MODE" == "demo" ]]; then
   if ! printf '%s\n' "$HEALTH" | grep -q '"demo":true'; then
     echo "demo app is not talking to the demo server"
@@ -30,6 +33,7 @@ if [[ "$MODE" == "demo" ]]; then
     echo "demo server is still locked"
     exit 1
   fi
+fi
 fi
 sleep 5
 if ! pgrep -x schooldesk >/dev/null; then
@@ -67,12 +71,26 @@ python3 "$ROOT/scripts/not_blank.py" "$BMP"
 MODE="${4:-check}"
 TEXT="$(swift "$ROOT/scripts/mac_ui.swift" ocr "$SHOT")"
 printf '%s\n' "$TEXT"
-if [[ "$MODE" == "demo" ]]; then
+if [[ "$MODE" == "desk" || "$MODE" == "demo" ]]; then
   if printf '%s\n' "$TEXT" | grep -q "Unlock"; then
     echo "demo showed the unlock screen"
     exit 1
   fi
-  if ! printf '%s\n' "$TEXT" | grep -q "Sign in"; then
+  if [[ "$MODE" == "desk" ]]; then
+    for _ in $(seq 1 20); do
+      if printf '%s\n' "$TEXT" | grep -q "Choose who you are"; then
+        break
+      fi
+      sleep 1
+      screencapture -x -l "$WID" "$SHOT" || true
+      TEXT="$(swift "$ROOT/scripts/mac_ui.swift" ocr "$SHOT" || true)"
+    done
+    if ! printf '%s\n' "$TEXT" | grep -q "Choose who you are"; then
+      echo "demo did not open on the role screen"
+      printf '%s\n' "$TEXT"
+      exit 1
+    fi
+  elif ! printf '%s\n' "$TEXT" | grep -q "Sign in"; then
     echo "demo did not show the sign-in screen"
     exit 1
   fi

@@ -3,6 +3,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:provider/provider.dart';
 
 import 'app_state.dart';
+import 'demo_look.dart';
 import 'edition.dart';
 import 'theme.dart';
 
@@ -43,6 +44,9 @@ class DeskHostState extends State<DeskHost> {
     final wide = MediaQuery.sizeOf(context).width >= 960;
     final safeIndex = index >= items.length + 1 ? 0 : index;
     final page = safeIndex == 0 ? widget.home : items[safeIndex - 1].page;
+    if (demoEdition) {
+      return DemoChrome(items: items, index: safeIndex, onSelect: go, wide: wide, child: page);
+    }
     if (wide) {
       return Scaffold(
         backgroundColor: paper,
@@ -94,6 +98,9 @@ class SchoolScaffold extends StatelessWidget {
     final nav = Navigator.maybeOf(context);
     final desk = DeskHost.of(context);
     final canBack = (nav?.canPop() ?? false) || (desk != null && desk.index != 0);
+    if (demoEdition && title.isEmpty) {
+      return Scaffold(backgroundColor: cream, body: SafeArea(child: Column(children: [Expanded(child: body), const SchoolFooter()])));
+    }
     return Scaffold(
       backgroundColor: paper,
       body: SafeArea(
@@ -135,6 +142,11 @@ class SchoolScaffold extends StatelessWidget {
                       ],
                     ),
                   ),
+                  if (demoEdition)
+                    TextButton(onPressed: () {
+                      Navigator.of(context).popUntil((route) => route.isFirst);
+                      context.read<AppModel>().signOut();
+                    }, child: const Text('Switch role')),
                   if (demoEdition)
                     Container(
                       margin: const EdgeInsets.only(right: 8),

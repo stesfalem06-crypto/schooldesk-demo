@@ -1,11 +1,11 @@
 import 'dart:io';
 
 import 'package:material_ui/material_ui.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 
 import 'api.dart';
 import 'app_state.dart';
+import 'saved_files.dart';
 import 'shell.dart';
 import 'theme.dart';
 import 'widgets.dart';
@@ -380,7 +380,7 @@ class _TimetableScreenState extends State<TimetableScreen> {
     try {
       final query = focusId == null ? '' : (byTeacher ? '?teacher_id=$focusId' : '?class_id=$focusId');
       final bytes = await context.read<AppModel>().api!.bytes('/api/v1/timetable.pdf$query');
-      final dir = await getApplicationDocumentsDirectory();
+      final dir = await reportFolder();
       final file = File('${dir.path}/SchoolDesk-week.pdf');
       await file.writeAsBytes(bytes);
       if (mounted) saved(context, 'Saved ${file.path}');

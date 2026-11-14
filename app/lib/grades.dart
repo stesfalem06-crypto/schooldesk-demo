@@ -1,11 +1,11 @@
 import 'dart:io';
 
 import 'package:material_ui/material_ui.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 
 import 'api.dart';
 import 'app_state.dart';
+import 'saved_files.dart';
 import 'shell.dart';
 import 'theme.dart';
 import 'widgets.dart';
@@ -138,7 +138,7 @@ class _GradeSummaryState extends State<GradeSummary> {
       final model = context.read<AppModel>();
       await model.ask((api) => api.post('/api/v1/semester/close', {}));
       final list = asMaps(await model.ask((api) => api.get('/api/v1/reports/semester')));
-      final dir = await getApplicationDocumentsDirectory();
+      final dir = await reportFolder();
       for (final item in list) {
         final bytes = await model.api!.bytes('/api/v1/reports/semester/${item['id']}');
         final name = (item['title'] ?? 'stats').toString().replaceAll(' ', '-');

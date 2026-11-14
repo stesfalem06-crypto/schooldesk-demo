@@ -7,6 +7,8 @@ import 'package:provider/provider.dart';
 import 'app_state.dart';
 import 'edition.dart';
 import 'local_server.dart';
+import 'demo_home.dart';
+import 'role_screen.dart';
 import 'screens.dart';
 import 'shell.dart';
 import 'startup_log.dart';
@@ -51,6 +53,12 @@ class _StartupAppState extends State<StartupApp> {
   Future<void> boot() async {
     setState(() { starting = true; problem = null; });
     try {
+      if (demoEdition) {
+        final next = AppModel(Vault());
+        await next.bootDemo();
+        if (mounted) setState(() { model = next; starting = false; problem = null; });
+        return;
+      }
       var server = await startBundledServer();
       if (server == LocalServer.notReady) {
         await Future<void>.delayed(const Duration(seconds: 2));
@@ -156,8 +164,12 @@ class Gate extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final model = context.watch<AppModel>();
+    if (demoEdition) {
+      if (model.user.isEmpty) return const ChooseRoleScreen();
+      return DeskHost(home: const DemoHome(), pages: rolePages);
+    }
     if (model.base == null) return const ConnectScreen();
-    if (!demoEdition && !model.licensed) return const LockScreen();
+    if (!model.licensed) return const LockScreen();
     if (model.token == null || model.token!.isEmpty || model.user.isEmpty) return const LoginScreen();
     return DeskHost(home: const HomeScreen(), pages: rolePages);
   }

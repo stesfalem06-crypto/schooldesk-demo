@@ -21,8 +21,14 @@ The server is locked until an unlock code is entered. The lock screen shows a sh
 
 ## Demo disk image
 
-`SchoolDesk-Demo.dmg` is a separate build for looking around when there is no school server. It is the `macos-demo` artifact. The production disk image is unchanged and still asks for an unlock code.
+`SchoolDesk-Demo.dmg` is a separate build. It does not contain a server, it does not use the network, and it does not ask for an unlock code or a password. The production disk image is unchanged and still asks for an unlock code.
 
-Open it the same way as the school app. It starts its own server, loads a sample school, and does not ask for an unlock code. A small DEMO badge stays on the screen. On the sign-in screen, choose Admin, Director, Homeroom teacher, or Subject teacher. The sample records stay in `Library/Application Support/SchoolDesk Demo`.
+The demo opens on Choose who you are. Tap School admin, Director, Homeroom teacher (Samuel, Grade 8A), or Subject teacher (Meron, English). Switch role is in the header. Reset sample data puts the sample school back. Records stay in `Library/Application Support/SchoolDesk Demo`. Reports are written to `Documents/SchoolDesk`.
+
+A download from Drive or the browser is marked with quarantine. On macOS 26, Gatekeeper then refuses an ad-hoc signed app, so a double-click can look like the app is not opening. Use one of these:
+
+1. System Settings, Privacy & Security, scroll to the message about SchoolDesk Demo, choose Open Anyway, then Open.
+2. In Terminal: `xattr -dr com.apple.quarantine` on `SchoolDesk Demo.app`, then open it.
+3. In the disk image, open `Open SchoolDesk Demo.command`. If macOS stops that file too, Control-click it and choose Open.
 
 The office app in this disk image is built for Apple silicon. The server inside it runs on both Apple silicon and Intel.

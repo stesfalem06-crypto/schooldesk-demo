@@ -1,9 +1,13 @@
 import 'dart:convert';
+import 'dart:io';
 import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 
 import 'api.dart';
+import 'edition.dart';
+import 'local_api.dart';
+import 'school_book.dart';
 import 'startup_log.dart';
 import 'vault.dart';
 
@@ -34,7 +38,30 @@ class AppModel extends ChangeNotifier {
 
   String _device = '';
 
-  SchoolApi? get api => base == null ? null : SchoolApi(base!, token: token);
+  SchoolApi? get api {
+    if (demoEdition) return LocalSchoolApi();
+    return base == null ? null : SchoolApi(base!, token: token);
+  }
+
+  Future<void> bootDemo() async {
+    await SchoolBook.open();
+    school = SchoolBook.instance.schoolName;
+    licensed = true;
+    base = 'local';
+    if (Platform.environment['SCHOOLDESK_SMOKE'] == 'admin') enterRole('admin');
+    notifyListeners();
+  }
+
+  void enterRole(String key) {
+    final book = SchoolBook.instance;
+    book.setActor(key);
+    user = Map<String, dynamic>.from(book.actor ?? {});
+    school = book.schoolName;
+    licensed = true;
+    base = 'local';
+    token = 'local';
+    notifyListeners();
+  }
 
   Future<void> boot() async {
     await vault.open();
@@ -158,6 +185,12 @@ class AppModel extends ChangeNotifier {
   }
 
   Future<void> signOut() async {
+    if (demoEdition) {
+      user = {};
+      token = null;
+      notifyListeners();
+      return;
+    }
     try {
       await api?.post('/api/v1/auth/logout', {});
     } catch (_) {}

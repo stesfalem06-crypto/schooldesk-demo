@@ -1,11 +1,11 @@
 import 'dart:io';
 
 import 'package:material_ui/material_ui.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 
 import 'api.dart';
 import 'app_state.dart';
+import 'saved_files.dart';
 import 'shell.dart';
 import 'theme.dart';
 import 'widgets.dart';
@@ -647,7 +647,7 @@ class _ReportScreenState extends State<ReportScreen> {
     setState(() => message = 'Making the ${format.toUpperCase()}…');
     try {
       final file = await context.read<AppModel>().api!.postBytes('/api/v1/reports/export', {'format': format, 'sections': chosen.toList()});
-      final dir = await getApplicationDocumentsDirectory();
+      final dir = await reportFolder();
       final path = '${dir.path}/SchoolDesk-report.$format';
       await File(path).writeAsBytes(file);
       setState(() => message = 'Saved $path');
