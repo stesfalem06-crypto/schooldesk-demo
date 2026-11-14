@@ -333,11 +333,8 @@ jobs:
           rm -f dist/SchoolDesk-Demo.dmg
           hdiutil create -volname "SchoolDesk Demo" -srcfolder dist/dmg -ov -format UDZO "dist/SchoolDesk-Demo.dmg"
           xattr -w com.apple.quarantine "0083;$(date +%s);Google Drive;00000000-0000-0000-0000-000000000000" dist/SchoolDesk-Demo.dmg || true
-          rm -rf /tmp/sd-mount
-          mkdir -p /tmp/sd-mount
-          hdiutil attach dist/SchoolDesk-Demo.dmg -mountpoint /tmp/sd-mount -nobrowse
-          echo "Mounted disk image. Quarantine on the image does not by itself clear the copy." | tee -a dist/gatekeeper.txt
-          hdiutil detach /tmp/sd-mount || true
+          echo "The disk image carries the quarantine attribute a Drive download would add. Mounting that image from the runner can stall on a Gatekeeper prompt, so the open check is done on the app copy above." | tee -a dist/gatekeeper.txt
+          xattr -l dist/SchoolDesk-Demo.dmg | tee -a dist/gatekeeper.txt || true
           test -f dist/SchoolDesk-Demo.dmg
       - uses: actions/upload-artifact@v4
         with:
