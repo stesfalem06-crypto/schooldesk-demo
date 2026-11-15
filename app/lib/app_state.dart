@@ -37,20 +37,23 @@ class AppModel extends ChangeNotifier {
   String get deviceId => _device;
 
   String _device = '';
+  String smokePage = '';
 
   SchoolApi? get api {
     if (demoEdition) return LocalSchoolApi();
     return base == null ? null : SchoolApi(base!, token: token);
   }
 
-  String _smokeFile() {
-    final marker = File('${SchoolBook.instance.directory}/smoke-role');
+  String _smokeFile() => _marker('smoke-role');
+
+  String _marker(String name) {
+    final marker = File('${SchoolBook.instance.directory}/$name');
     if (!marker.existsSync()) return '';
-    final role = marker.readAsStringSync().trim();
+    final text = marker.readAsStringSync().trim();
     try {
       marker.deleteSync();
     } catch (_) {}
-    return role;
+    return text;
   }
 
   Future<void> bootDemo() async {
@@ -60,6 +63,7 @@ class AppModel extends ChangeNotifier {
     base = 'local';
     final smoke = Platform.environment['SCHOOLDESK_SMOKE'] ?? _smokeFile();
     if (smoke == 'admin' || smoke == 'director' || smoke == 'homeroom' || smoke == 'subject') enterRole(smoke);
+    smokePage = _marker('smoke-page');
     notifyListeners();
   }
 

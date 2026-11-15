@@ -94,16 +94,20 @@ if [[ "$MODE" == "desk" || "$MODE" == "demo" ]]; then
     echo "demo did not show the sign-in screen"
     exit 1
   fi
-  killall schooldesk || true
-  sleep 2
-  mkdir -p "$HOME/Library/Application Support/SchoolDesk Demo"
-  printf 'admin' > "$HOME/Library/Application Support/SchoolDesk Demo/smoke-role"
-  open "$APP"
-  HOME_SHOT="${SHOT%.png}-home.png"
-  HOME_TEXT=""
-  for _ in $(seq 1 25); do
+  DATA="$HOME/Library/Application Support/SchoolDesk Demo"
+  mkdir -p "$DATA"
+  capture() {
+    local role="$1" page="$2" dest="$3" need="$4"
+    killall schooldesk || true
     sleep 1
-    WID="$(swift -e 'import CoreGraphics
+    rm -f "$DATA/smoke-role" "$DATA/smoke-page"
+    if [[ -n "$role" ]]; then printf '%s' "$role" > "$DATA/smoke-role"; fi
+    if [[ -n "$page" ]]; then printf '%s' "$page" > "$DATA/smoke-page"; fi
+    open "$APP"
+    local text="" wid=""
+    for _ in $(seq 1 25); do
+      sleep 1
+      wid="$(swift -e 'import CoreGraphics
 import Foundation
 let info = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]] ?? []
 for w in info {
@@ -113,36 +117,46 @@ for w in info {
     break
   }
 }')" || true
-    WID="$(printf '%s' "$WID" | tr -d '[:space:]')"
-    if [[ -z "$WID" ]]; then
-      continue
-    fi
-    screencapture -x -l "$WID" "$HOME_SHOT" || true
-    if [[ ! -f "$HOME_SHOT" ]]; then
-      continue
-    fi
-    HOME_TEXT="$(swift "$ROOT/scripts/mac_ui.swift" ocr "$HOME_SHOT" || true)"
-    if printf '%s\n' "$HOME_TEXT" | grep -q "Unlock"; then
-      echo "unlock screen appeared after sign-in"
-      printf '%s\n' "$HOME_TEXT"
+      wid="$(printf '%s' "$wid" | tr -d '[:space:]')"
+      if [[ -z "$wid" ]]; then
+        continue
+      fi
+      screencapture -x -l "$wid" "$dest" || true
+      if [[ ! -f "$dest" ]]; then
+        continue
+      fi
+      text="$(swift "$ROOT/scripts/mac_ui.swift" ocr "$dest" || true)"
+      if printf '%s\n' "$text" | grep -q "Unlock"; then
+        echo "unlock screen on $dest"
+        printf '%s\n' "$text"
+        exit 1
+      fi
+      if printf '%s\n' "$text" | grep -q "$need"; then
+        break
+      fi
+    done
+    printf '%s\n' "$text"
+    local bmp="${dest%.png}.bmp"
+    sips -s format bmp "$dest" --out "$bmp" >/dev/null
+    python3 "$ROOT/scripts/not_blank.py" "$bmp"
+    if ! printf '%s\n' "$text" | grep -q "$need"; then
+      echo "missing '$need' on $dest"
       exit 1
     fi
-    if printf '%s\n' "$HOME_TEXT" | grep -q "See fees"; then
-      break
+    if [[ -z "$page" && -n "$role" ]] && ! printf '%s\n' "$text" | grep -q "Hello"; then
+      echo "home page was blank on $dest"
+      exit 1
     fi
-  done
-  printf '%s\n' "$HOME_TEXT"
-  HOME_BMP="${HOME_SHOT%.png}.bmp"
-  sips -s format bmp "$HOME_SHOT" --out "$HOME_BMP" >/dev/null
-  python3 "$ROOT/scripts/not_blank.py" "$HOME_BMP"
-  if printf '%s\n' "$HOME_TEXT" | grep -q "Unlock"; then
-    echo "unlock screen appeared after sign-in"
-    exit 1
-  fi
-  if ! printf '%s\n' "$HOME_TEXT" | grep -q "See fees"; then
-    echo "admin home did not appear"
-    exit 1
-  fi
+  }
+  OUT="$(dirname "$SHOT")"
+  capture admin "" "$OUT/admin-home.png" "Hello, School admin"
+  capture director "" "$OUT/director-home.png" "Hello, Director"
+  capture homeroom "" "$OUT/homeroom-home.png" "Hello, Samuel"
+  capture subject "" "$OUT/subject-home.png" "Hello, Meron"
+  capture admin fees "$OUT/fees.png" "Whole school"
+  capture subject marks "$OUT/marks.png" "English"
+  capture admin results "$OUT/statistics.png" "Make statistics"
+  cp "$OUT/admin-home.png" "${SHOT%.png}-home.png"
 fi
 if [[ "$MODE" == "prod" ]]; then
   HEALTH="$(curl -fsS "http://127.0.0.1:${PORT}/api/v1/health")"

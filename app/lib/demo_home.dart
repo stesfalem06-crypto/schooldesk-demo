@@ -25,6 +25,18 @@ class _DemoHomeState extends State<DemoHome> {
   void initState() {
     super.initState();
     load();
+    WidgetsBinding.instance.addPostFrameCallback((_) => openSmokePage());
+  }
+
+  void openSmokePage() {
+    if (!mounted) return;
+    final page = context.read<AppModel>().smokePage;
+    Widget? screen;
+    if (page == 'fees') screen = const FeesScreen();
+    if (page == 'marks') screen = const MarksScreen();
+    if (page == 'results') screen = const ResultsScreen();
+    if (screen == null) return;
+    Navigator.of(context).push(MaterialPageRoute(builder: (_) => screen!));
   }
 
   Future<void> load() async {
