@@ -14,6 +14,14 @@ import 'widgets.dart';
 
 const _dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
+int _classOrder(String name) {
+  final match = RegExp(r'(\d+)\s*([A-Za-z])?').firstMatch(name);
+  if (match == null) return 100000;
+  final number = int.parse(match.group(1)!);
+  final letter = match.group(2)?.toUpperCase() ?? '';
+  return number * 100 + (letter.isEmpty ? 0 : letter.codeUnitAt(0));
+}
+
 class TimetableScreen extends StatefulWidget {
   const TimetableScreen({super.key});
   @override
@@ -99,6 +107,12 @@ class _TimetableScreenState extends State<TimetableScreen> {
     return SchoolScaffold(
       title: 'Week',
       school: context.watch<AppModel>().school,
+      actions: admin
+          ? [
+              FilledButton(onPressed: loading ? null : generate, child: const Text('Make the week')),
+              const SizedBox(width: 8),
+            ]
+          : null,
       body: loading
           ? const Center(child: CircularProgressIndicator())
           : error != null
@@ -221,6 +235,7 @@ class _TimetableScreenState extends State<TimetableScreen> {
       }
     }
     if (items.isEmpty) return const SizedBox.shrink();
+    items.sort((a, b) => _classOrder(a['name'].toString()).compareTo(_classOrder(b['name'].toString())));
     return Wrap(spacing: 8, children: [
       for (final item in items)
         ChoiceChip(

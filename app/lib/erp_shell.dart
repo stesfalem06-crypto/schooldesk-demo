@@ -48,7 +48,7 @@ class ErpShellState extends State<ErpShell> {
       _navKey = GlobalKey<NavigatorState>();
     }
     final model = context.watch<AppModel>();
-    return ColoredBox(
+    return Material(
       color: const Color(0xFFF4F6F8),
       child: Row(children: [
         _Side(items: widget.items, index: widget.index, onSelect: widget.onSelect),

@@ -1,3 +1,4 @@
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:schooldesk/main.dart' as app;
@@ -21,12 +22,58 @@ void main() {
     expect(find.textContaining('Pass rate'), findsWidgets);
     expect(find.textContaining('Nfk'), findsWidgets);
     expect(find.textContaining('Developed by'), findsWidgets);
+    expectPlain(tester);
     expect(tester.takeException(), isNull);
+    await tester.tap(find.byKey(const Key('nav-Timetable')));
+    for (var i = 0; i < 20 && classChips(tester).isEmpty; i++) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+    expect(find.text('Make the week'), findsWidgets);
+    final chips = classChips(tester);
+    expect(chips, isNotEmpty);
+    expect(chips, orderedClasses(chips));
+    expectPlain(tester);
+    await tester.tap(find.byKey(const Key('nav-Dashboard')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
 
     tester.view.physicalSize = const Size(800, 600);
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 200));
     expect(find.text('Dashboard'), findsWidgets);
     expect(find.textContaining('Pass rate'), findsWidgets);
+    expectPlain(tester);
   });
+}
+
+void expectPlain(WidgetTester tester) {
+  const yellow = Color(0xFFFFFF00);
+  for (final element in find.byType(Text).evaluate()) {
+    final render = element.renderObject;
+    if (render is! RenderParagraph) continue;
+    final span = render.text;
+    if (span is TextSpan && span.style?.decorationColor == yellow) {
+      fail('yellow underline on ${span.toPlainText()}');
+    }
+  }
+}
+
+List<String> classChips(WidgetTester tester) {
+  final names = <String>[];
+  for (final element in find.byType(ChoiceChip).evaluate()) {
+    final label = (element.widget as ChoiceChip).label;
+    if (label is Text && RegExp(r'\d').hasMatch(label.data ?? '')) names.add(label.data ?? '');
+  }
+  return names;
+}
+
+List<String> orderedClasses(List<String> names) {
+  int rank(String name) {
+    final match = RegExp(r'(\d+)\s*([A-Za-z])?').firstMatch(name);
+    if (match == null) return 100000;
+    final number = int.parse(match.group(1)!);
+    final letter = match.group(2)?.toUpperCase() ?? '';
+    return number * 100 + (letter.isEmpty ? 0 : letter.codeUnitAt(0));
+  }
+  return [...names]..sort((a, b) => rank(a).compareTo(rank(b)));
 }

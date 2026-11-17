@@ -172,7 +172,7 @@ class _ErpDashboardState extends State<ErpDashboard> {
         children: [
           Text('Good day, ${model.user['display_name'] ?? ''}', style: const TextStyle(fontSize: 16, color: Color(0xFF5C6B7A))),
           const SizedBox(height: 12),
-          Wrap(spacing: 12, runSpacing: 12, children: [
+          _kpis([
             _kpi('Students', '$students', 'Boys $male · Girls $female'),
             _kpi('Away today', '${dash?['absent_today'] ?? '—'}', 'Marked absent today'),
             _kpi('Fees collected', model.seesSchool ? nfk(finance['fees_collected']) : '—', model.seesSchool ? 'Still due ${nfk(finance['fees_remaining'])}' : 'Your class fees are under Fees'),
@@ -195,9 +195,22 @@ class _ErpDashboardState extends State<ErpDashboard> {
     );
   }
 
+  Widget _kpis(List<Widget> cards) {
+    return LayoutBuilder(builder: (context, constraints) {
+      final columns = constraints.maxWidth < 720 ? 2 : cards.length;
+      const gap = 12.0;
+      final width = (constraints.maxWidth - gap * (columns - 1)) / columns;
+      return Wrap(
+        spacing: gap,
+        runSpacing: gap,
+        children: [for (final card in cards) SizedBox(width: width, child: card)],
+      );
+    });
+  }
+
   Widget _kpi(String title, String value, String note) {
     return SizedBox(
-      width: 220,
+      width: double.infinity,
       child: Card(
         child: Padding(
           padding: const EdgeInsets.all(14),

@@ -168,7 +168,7 @@ for w in info {
   capture admin results "$OUT/results.png" "Make statistics"
   capture admin fees "$OUT/fees.png" "Whole school"
   capture admin attendance "$OUT/attendance.png" "Samuel"
-  capture homeroom timetable "$OUT/timetable.png" "Make the week"
+  capture admin timetable "$OUT/timetable.png" "Make the week"
   capture director reports "$OUT/reports.png" "Save PDF"
   capture admin staff "$OUT/staff.png" "Add a person"
   cp "$OUT/admin-home.png" "${SHOT%.png}-home.png"
