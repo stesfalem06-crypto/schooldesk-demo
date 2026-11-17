@@ -5,6 +5,7 @@ import 'package:path_provider/path_provider.dart';
 Future<void> logStartup(Object error, [StackTrace? stack]) async {
   final text = '${DateTime.now().toIso8601String()} $error${stack == null ? '' : '\n$stack'}\n';
   try {
+    stdout.writeln(text);
     stderr.writeln(text);
   } catch (_) {}
   try {

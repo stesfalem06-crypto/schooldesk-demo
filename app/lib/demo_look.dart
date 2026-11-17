@@ -72,15 +72,18 @@ class DemoChrome extends StatelessWidget {
   }
 
   Widget _rail(List<DeskItem> items, int index) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 12, 4, 12),
-      child: SoftCard(
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-        child: SingleChildScrollView(
-          child: Column(children: [
-            _bit(Icons.home, 'Home', index == 0, () => onSelect(0)),
-            for (var i = 0; i < items.length; i++) _bit(items[i].icon, items[i].label, index == i + 1, () => onSelect(i + 1)),
-          ]),
+    return SizedBox(
+      width: 108,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 12, 4, 12),
+        child: SoftCard(
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+          child: SingleChildScrollView(
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              _bit(Icons.home, 'Home', index == 0, () => onSelect(0)),
+              for (var i = 0; i < items.length; i++) _bit(items[i].icon, items[i].label, index == i + 1, () => onSelect(i + 1)),
+            ]),
+          ),
         ),
       ),
     );
@@ -94,7 +97,7 @@ class DemoChrome extends StatelessWidget {
         borderRadius: BorderRadius.circular(18),
         child: SizedBox(
           width: 76,
-          child: Column(children: [
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
             Container(
               width: 48,
               height: 48,

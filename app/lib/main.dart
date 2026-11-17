@@ -17,6 +17,7 @@ import 'vault.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  logStartup(demoEdition ? 'opening the demo' : 'opening SchoolDesk');
   if (!Platform.environment.containsKey('FLUTTER_TEST')) {
     FlutterError.onError = (details) {
       logStartup(details.exception, details.stack);
@@ -28,7 +29,8 @@ Future<void> main() async {
     };
     ErrorWidget.builder = (details) {
       logStartup(details.exception, details.stack);
-      return StartupProblem(message: 'Something went wrong while drawing this screen.', onRetry: () {});
+      final line = details.exceptionAsString().split('\n').first;
+      return StartupProblem(message: 'Something went wrong while drawing this screen.\n$line', onRetry: () {});
     };
   }
   runApp(const RepaintBoundary(child: StartupApp()));

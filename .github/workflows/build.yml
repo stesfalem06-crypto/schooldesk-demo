@@ -295,7 +295,7 @@ jobs:
         working-directory: app
         env:
           SCHOOLDESK_SHOTS: ${{ github.workspace }}/dist/demo-shots
-        run: flutter test test/demo_walk_test.dart --dart-define=SCHOOLDESK_DEMO=true
+        run: flutter test test/demo_walk_test.dart test/mac_window_test.dart --dart-define=SCHOOLDESK_DEMO=true
       - name: Build demo Mac app
         working-directory: app
         run: flutter build macos --release --dart-define=SCHOOLDESK_DEMO=true
@@ -340,14 +340,26 @@ jobs:
           echo "The disk image carries the quarantine attribute a Drive download would add. Mounting that image from the runner can stall on a Gatekeeper prompt, so the open check is done on the app copy above." | tee -a dist/gatekeeper.txt
           xattr -l dist/SchoolDesk-Demo.dmg | tee -a dist/gatekeeper.txt || true
           test -f dist/SchoolDesk-Demo.dmg
+      - name: Show the startup log
+        if: always()
+        run: |
+          mkdir -p dist
+          echo "---- SchoolDesk startup log ----"
+          if [[ -f "$HOME/Library/Logs/SchoolDesk/startup.log" ]]; then
+            cat "$HOME/Library/Logs/SchoolDesk/startup.log" | tee dist/startup.log
+          else
+            echo "(no startup log)" | tee dist/startup.log
+          fi
       - uses: actions/upload-artifact@v4
         with:
           name: macos-demo
           path: dist/SchoolDesk-Demo.dmg
           if-no-files-found: error
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: macos-demo-smoke
+          if-no-files-found: warn
           path: |
             dist/macos-demo-smoke.png
             dist/macos-demo-smoke-home.png
@@ -359,7 +371,7 @@ jobs:
             dist/marks.png
             dist/statistics.png
             dist/gatekeeper.txt
-          if-no-files-found: error
+            dist/startup.log
 
   release-demo:
     if: endsWith(github.repository, '/schooldesk-demo')

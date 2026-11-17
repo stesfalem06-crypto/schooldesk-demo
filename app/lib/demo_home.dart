@@ -2,6 +2,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:provider/provider.dart';
 
 import 'app_state.dart';
+import 'startup_log.dart';
 import 'demo_extra.dart';
 import 'demo_look.dart';
 import 'office.dart';
@@ -25,7 +26,19 @@ class _DemoHomeState extends State<DemoHome> {
   void initState() {
     super.initState();
     load();
-    WidgetsBinding.instance.addPostFrameCallback((_) => openSmokePage());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      openSmokePage();
+      noteLayout();
+    });
+  }
+
+  void noteLayout() {
+    if (!mounted) return;
+    final box = context.findRenderObject();
+    final size = box is RenderBox ? box.size : Size.zero;
+    final window = MediaQuery.sizeOf(context);
+    logStartup('home laid out ${size.width.toStringAsFixed(0)}x${size.height.toStringAsFixed(0)} in a ${window.width.toStringAsFixed(0)}x${window.height.toStringAsFixed(0)} window');
+    if (size.height < 40) logStartup('home body has no height, so the page cannot paint');
   }
 
   void openSmokePage() {

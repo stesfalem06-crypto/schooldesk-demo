@@ -5,6 +5,16 @@ PORT="$2"
 SHOT="$3"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 MODE="${4:-check}"
+startup_log() {
+  echo "---- SchoolDesk startup log ----"
+  local log="${HOME}/Library/Logs/SchoolDesk/startup.log"
+  if [[ -f "$log" ]]; then
+    cat "$log"
+  else
+    echo "(no startup log at $log)"
+  fi
+}
+trap startup_log EXIT
 xattr -cr "$APP" || true
 open "$APP"
 if [[ "$MODE" == "desk" ]]; then
