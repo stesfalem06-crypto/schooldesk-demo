@@ -3,8 +3,9 @@ import 'package:material_ui/material_ui.dart';
 import 'package:provider/provider.dart';
 
 import 'app_state.dart';
-import 'demo_look.dart';
 import 'edition.dart';
+import 'erp_shell.dart';
+import 'startup_log.dart';
 import 'theme.dart';
 
 class DeskItem {
@@ -35,7 +36,15 @@ class DeskHostState extends State<DeskHost> {
     if (nav != null && nav.canPop()) nav.popUntil((route) => route.isFirst);
   }
 
-  void go(int i) => setState(() => index = i);
+  void go(int i) {
+    final watch = Stopwatch()..start();
+    setState(() => index = i);
+    if (demoEdition) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        logStartup('page $i ${watch.elapsedMilliseconds} ms');
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -45,7 +54,7 @@ class DeskHostState extends State<DeskHost> {
     final safeIndex = index >= items.length + 1 ? 0 : index;
     final page = safeIndex == 0 ? widget.home : items[safeIndex - 1].page;
     if (demoEdition) {
-      return DemoChrome(items: items, index: safeIndex, onSelect: go, wide: wide, child: page);
+      return ErpShell(items: items, index: safeIndex, onSelect: go, child: page);
     }
     if (wide) {
       return Scaffold(
@@ -97,9 +106,43 @@ class SchoolScaffold extends StatelessWidget {
   Widget build(BuildContext context) {
     final nav = Navigator.maybeOf(context);
     final desk = DeskHost.of(context);
-    final canBack = (nav?.canPop() ?? false) || (desk != null && desk.index != 0);
+    final inside = demoEdition && ErpShell.of(context) != null;
+    final canBack = inside ? (nav?.canPop() ?? false) : ((nav?.canPop() ?? false) || (desk != null && desk.index != 0));
+    if (inside) {
+      return Scaffold(
+        backgroundColor: const Color(0xFFF4F6F8),
+        body: Column(children: [
+          if (title.isNotEmpty || canBack)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
+              child: Row(children: [
+                if (canBack)
+                  IconButton(
+                    tooltip: 'Back',
+                    onPressed: () {
+                      if (nav != null && nav.canPop()) {
+                        nav.pop();
+                      } else {
+                        desk?.home();
+                      }
+                    },
+                    icon: const Icon(Icons.arrow_back),
+                  ),
+                Expanded(
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text(title, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
+                    if ((hint ?? '').isNotEmpty) Text(hint!, style: const TextStyle(fontSize: 15, color: Color(0xFF5C6B7A))),
+                  ]),
+                ),
+                ...?actions,
+              ]),
+            ),
+          Expanded(child: body),
+        ]),
+      );
+    }
     if (demoEdition && title.isEmpty) {
-      return Scaffold(backgroundColor: cream, body: SafeArea(child: Column(children: [Expanded(child: body), const SchoolFooter()])));
+      return Scaffold(backgroundColor: const Color(0xFFF4F6F8), body: SafeArea(child: Column(children: [Expanded(child: body), const SchoolFooter()])));
     }
     return Scaffold(
       backgroundColor: paper,

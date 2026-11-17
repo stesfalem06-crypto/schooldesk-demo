@@ -7,7 +7,7 @@ import 'package:provider/provider.dart';
 import 'app_state.dart';
 import 'edition.dart';
 import 'local_server.dart';
-import 'demo_home.dart';
+import 'erp_home.dart';
 import 'role_screen.dart';
 import 'screens.dart';
 import 'shell.dart';
@@ -170,7 +170,7 @@ class Gate extends StatelessWidget {
     final model = context.watch<AppModel>();
     if (demoEdition) {
       if (model.user.isEmpty) return const ChooseRoleScreen();
-      return DeskHost(home: const DemoHome(), pages: rolePages);
+      return DeskHost(home: const ErpDashboard(), pages: erpMenu);
     }
     if (model.base == null) return const ConnectScreen();
     if (!model.licensed) return const LockScreen();

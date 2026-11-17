@@ -35,7 +35,7 @@ class _NumpadState extends State<Numpad> {
   @override
   Widget build(BuildContext context) {
     final keys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', '⌫'];
-    return Padding(
+    return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
         mainAxisSize: MainAxisSize.min,

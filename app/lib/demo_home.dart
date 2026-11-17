@@ -154,7 +154,7 @@ class _DemoHomeState extends State<DemoHome> {
     return ClipRRect(
       borderRadius: const BorderRadius.only(topLeft: Radius.circular(36), topRight: Radius.circular(84), bottomLeft: Radius.circular(72), bottomRight: Radius.circular(28)),
       child: Stack(children: [
-        Image.asset('assets/hero-school.webp', height: 250, width: double.infinity, fit: BoxFit.cover),
+        const SizedBox(height: 250, width: double.infinity),
         Positioned.fill(
           child: DecoratedBox(decoration: BoxDecoration(gradient: LinearGradient(begin: Alignment.bottomLeft, end: Alignment.topRight, colors: [navy.withValues(alpha: 0.55), Colors.transparent]))),
         ),
@@ -203,7 +203,6 @@ class _DemoHomeState extends State<DemoHome> {
   }
 
   Widget _classCard(Map<String, dynamic> cls) {
-    final art = (cls['grade'] as num? ?? 0) % 2 == 0 ? 'assets/class-room.webp' : 'assets/school-yard.webp';
     return Padding(
       padding: const EdgeInsets.only(right: 10),
       child: SizedBox(
@@ -213,7 +212,7 @@ class _DemoHomeState extends State<DemoHome> {
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             ClipRRect(
               borderRadius: const BorderRadius.vertical(top: Radius.circular(26)),
-              child: Image.asset(art, height: 78, width: 180, fit: BoxFit.cover),
+              child: const SizedBox(height: 78, width: 180),
             ),
             Padding(
               padding: const EdgeInsets.all(10),
@@ -252,7 +251,7 @@ class _DemoHomeState extends State<DemoHome> {
     return ClipRRect(
       borderRadius: BorderRadius.circular(28),
       child: Stack(children: [
-        Image.asset('assets/school-yard.webp', height: 180, width: double.infinity, fit: BoxFit.cover),
+        const SizedBox(height: 180, width: double.infinity),
         Positioned.fill(child: Container(color: navy.withValues(alpha: 0.35))),
         const Positioned(left: 16, right: 16, bottom: 16, child: Text('“A kind word in class lasts all year.”', style: TextStyle(fontFamily: 'Georgia', color: Colors.white, fontSize: 22, fontWeight: FontWeight.w700))),
       ]),
@@ -267,7 +266,7 @@ class _DemoHomeState extends State<DemoHome> {
         const SizedBox(height: 8),
         SizedBox(height: 120, child: _bars(grades)),
         const SizedBox(height: 8),
-        ClipRRect(borderRadius: BorderRadius.circular(18), child: Image.asset('assets/campus-map.webp', height: 90, width: double.infinity, fit: BoxFit.cover)),
+        const SizedBox(height: 90, width: double.infinity),
       ]),
     );
   }

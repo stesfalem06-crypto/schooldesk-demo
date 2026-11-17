@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import 'app_state.dart';
 import 'demo_look.dart';
+import 'money.dart';
 import 'saved_files.dart';
 import 'school_book.dart';
 import 'shell.dart';
@@ -391,7 +392,7 @@ class _DefaulterScreenState extends State<DefaulterScreen> {
           for (final row in rows.take(30))
             SoftCard(child: ListTile(
               title: Text(row['full_name'].toString(), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
-              subtitle: Text('Left ${row['remaining']}'),
+              subtitle: Text('Left ${nfk(row['remaining'])}'),
               onTap: () => receipt(row),
             )),
         ],

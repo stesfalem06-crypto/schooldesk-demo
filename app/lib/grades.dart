@@ -9,6 +9,7 @@ import 'edition.dart';
 import 'saved_files.dart';
 import 'school_book.dart';
 import 'shell.dart';
+import 'money.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
@@ -108,7 +109,7 @@ class _GradeSummaryState extends State<GradeSummary> {
                         _card(
                           g['name']?.toString() ?? 'Grade',
                           widget.kind == 'fees'
-                              ? 'Collected ${g['collected']} · Left ${g['remaining']} · ${g['students']} students'
+                              ? 'Collected ${nfk(g['collected'])} · Left ${nfk(g['remaining'])} · ${g['students']} students'
                               : 'Promoted ${g['promoted']} · Failed ${g['failed']} · Left ${g['dropouts']} · ${g['students']} students',
                           () => setState(() => grade = g),
                         ),
@@ -121,7 +122,7 @@ class _GradeSummaryState extends State<GradeSummary> {
 
   Widget _totalCard() {
     if (widget.kind == 'fees') {
-      return _card('Whole school', 'Collected ${data?['collected'] ?? 0} · Left ${data?['remaining'] ?? 0} · ${data?['students'] ?? 0} students', null, color: leaf);
+      return _card('Whole school', 'Collected ${nfk(data?['collected'])} · Left ${nfk(data?['remaining'])} · ${data?['students'] ?? 0} students', null, color: leaf);
     }
     return _card('Whole school', 'Promoted ${data?['promoted'] ?? 0} · Failed ${data?['failed'] ?? 0} · Left ${data?['dropouts'] ?? 0}', null, color: leaf);
   }
@@ -129,6 +130,7 @@ class _GradeSummaryState extends State<GradeSummary> {
   Widget _card(String title, String subtitle, VoidCallback? onTap, {Color color = ink}) {
     return Card(
       child: ListTile(
+        key: Key('row-$title'),
         title: Text(title, style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: color)),
         subtitle: Text(subtitle, style: const TextStyle(fontSize: 16)),
         trailing: onTap == null ? null : const Icon(Icons.chevron_right, size: 32),
@@ -180,7 +182,7 @@ class _GradeSummaryState extends State<GradeSummary> {
     return Card(
       child: ListTile(
         title: Text(row['full_name'].toString(), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
-        subtitle: Text('Paid ${row['paid']} · Left ${row['remaining']}', style: TextStyle(fontSize: 16, color: left == 0 ? passGreen : failRed, fontWeight: FontWeight.w700)),
+        subtitle: Text('Paid ${nfk(row['paid'])} · Left ${nfk(row['remaining'])}', style: TextStyle(fontSize: 16, color: left == 0 ? passGreen : failRed, fontWeight: FontWeight.w700)),
       ),
     );
   }

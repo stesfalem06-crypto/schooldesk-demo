@@ -11,6 +11,12 @@ class SchoolBook {
   Map<String, dynamic> state = {};
   Map<String, dynamic>? actor;
 
+  Map<String, dynamic>? _financeCache;
+  Map<String, dynamic>? _chartsCache;
+  Map<String, Map<String, Map<String, dynamic>>>? _scoreIndex;
+  Map<String, List<Map<String, dynamic>>>? _lessonsByClass;
+  Map<String, List<Map<String, dynamic>>>? _assessmentsByLesson;
+
   static SchoolBook? _current;
   static SchoolBook get instance {
     final book = _current;
@@ -54,12 +60,40 @@ class SchoolBook {
 
   void resetNow() {
     state = _fresh();
+    _dropCache();
     _saveNow();
+  }
+
+  void _dropCache() {
+    _financeCache = null;
+    _chartsCache = null;
+    _scoreIndex = null;
+    _lessonsByClass = null;
+    _assessmentsByLesson = null;
   }
 
   void _saveNow() {
     Directory(directory).createSync(recursive: true);
     _file.writeAsStringSync(jsonEncode(state));
+  }
+
+  void _ensureIndex() {
+    if (_scoreIndex != null) return;
+    final scores = <String, Map<String, Map<String, dynamic>>>{};
+    for (final row in _rows('scores')) {
+      scores.putIfAbsent(row['assessment_id'].toString(), () => {})[row['student_id'].toString()] = row;
+    }
+    _scoreIndex = scores;
+    final lessons = <String, List<Map<String, dynamic>>>{};
+    for (final row in _rows('class_subjects')) {
+      lessons.putIfAbsent(row['class_id'].toString(), () => []).add(row);
+    }
+    _lessonsByClass = lessons;
+    final assessments = <String, List<Map<String, dynamic>>>{};
+    for (final row in _rows('assessments')) {
+      assessments.putIfAbsent(row['class_subject_id'].toString(), () => []).add(row);
+    }
+    _assessmentsByLesson = assessments;
   }
 
   String get schoolName => 'Hope Academy';
@@ -105,6 +139,7 @@ class SchoolBook {
     final tail = parts.length < 3 ? '' : parts.sublist(2).join('/');
     final query = uri.queryParameters;
     final data = body is Map ? body.map((k, v) => MapEntry(k.toString(), v)) : <String, dynamic>{};
+    if (method != 'GET') _dropCache();
     final result = _route(method, tail, query, data);
     if (method != 'GET') _saveNow();
     return result;
@@ -552,10 +587,12 @@ class SchoolBook {
     final limits = Map<String, dynamic>.from((state['settings'] as Map)['fail_limits'] as Map);
     final pupils = <Map<String, dynamic>>[];
     final detail = <String, List<Map<String, dynamic>>>{};
+    _ensureIndex();
+    final classLessons = _lessonsByClass![classId] ?? const <Map<String, dynamic>>[];
     for (final student in _pupils().where((s) => s['class_id'] == classId)) {
       final totals = <double>[];
       final subjects = <Map<String, dynamic>>[];
-      for (final lesson in _lessons().where((l) => l['class_id'] == classId)) {
+      for (final lesson in classLessons) {
         final mark = _subjectMark(lesson, student['id'].toString());
         totals.add(mark.total);
         subjects.add({'class_subject': lesson, 'result': {'mid': mark.mid, 'continuous': mark.continuous, 'exam': mark.exam, 'total': mark.total, 'exam_set': mark.examSet, 'passed': mark.passed}});
@@ -573,15 +610,17 @@ class SchoolBook {
   }
 
   SubjectMark _subjectMark(Map<String, dynamic> lesson, String studentId) {
+    _ensureIndex();
     final weights = Map<String, dynamic>.from((lesson['weights'] as Map?) ?? defaultWeights);
     final items = <Map<String, dynamic>>[];
-    for (final assessment in _rows('assessments').where((a) => a['class_subject_id'] == lesson['id'])) {
-      final scores = _rows('scores').where((s) => s['assessment_id'] == assessment['id'] && s['student_id'] == studentId).toList();
+    final assessments = _assessmentsByLesson![lesson['id'].toString()] ?? const <Map<String, dynamic>>[];
+    for (final assessment in assessments) {
+      final score = _scoreIndex![assessment['id'].toString()]?[studentId];
       items.add({
         'component': assessment['component'],
         'half': assessment['half'],
         'max': assessment['max_marks'],
-        'score': scores.isEmpty ? null : scores.first['score'],
+        'score': score?['score'],
       });
     }
     return summarize(weights, items);
@@ -645,6 +684,8 @@ class SchoolBook {
   }
 
   Map<String, dynamic> _finance() {
+    final cached = _financeCache;
+    if (cached != null) return cached;
     double sum(String key) {
       var total = 0.0;
       for (final row in _rows(key)) {
@@ -667,7 +708,7 @@ class SchoolBook {
     final utility = ((state['settings'] as Map)['utility_fee'] as num?)?.toDouble() ?? 0;
     final totalIncome = round2(collected + income);
     final totalExpense = round2(expenses + workshops + sports + utility);
-    return {
+    return _financeCache = {
       'fees_collected': collected,
       'fees_remaining': remaining,
       'manual_income': income,
@@ -1192,6 +1233,8 @@ class SchoolBook {
 
   Map<String, dynamic> _charts() {
     if (!_seesSchool()) throw ApiException('That is for the office');
+    final cached = _chartsCache;
+    if (cached != null) return cached;
     final summary = _resultSummary();
     final fees = _feeSummary();
     var male = 0, female = 0;
@@ -1205,7 +1248,7 @@ class SchoolBook {
       final present = rows.where((a) => (a as Map)['present'] == true).length;
       trend.add({'date': day, 'present': present, 'total': rows.length});
     }
-    return {
+    return _chartsCache = {
       'pass_by_grade': summary['grades'],
       'fees_by_grade': fees['grades'],
       'male': male,

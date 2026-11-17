@@ -17,7 +17,7 @@ const navy = Color(0xFF1E4A7A);
 const cream = Color(0xFFF3EEE4);
 const navyInk = Color(0xFF16324F);
 
-ThemeData schoolTheme() => demoEdition ? _wander() : _classic();
+ThemeData schoolTheme() => demoEdition ? _erp() : _classic();
 
 ThemeData _classic() {
   final base = ThemeData(
@@ -46,34 +46,35 @@ ThemeData _classic() {
   );
 }
 
-ThemeData _wander() {
+ThemeData _erp() {
   final base = ThemeData(
     useMaterial3: true,
-    colorScheme: ColorScheme.fromSeed(seedColor: navy, primary: navy, surface: cream),
-    scaffoldBackgroundColor: cream,
+    colorScheme: ColorScheme.fromSeed(seedColor: navy, primary: navy, surface: const Color(0xFFF4F6F8)),
+    scaffoldBackgroundColor: const Color(0xFFF4F6F8),
     fontFamily: 'Roboto',
   );
   return base.copyWith(
-    textTheme: base.textTheme.apply(bodyColor: navyInk, displayColor: navyInk),
-    cardTheme: CardThemeData(
-      color: const Color(0xFFFCFAF6),
+    textTheme: base.textTheme.apply(bodyColor: ink, displayColor: ink),
+    cardTheme: const CardThemeData(
+      color: Colors.white,
       elevation: 0,
-      margin: const EdgeInsets.symmetric(vertical: 6),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26), side: const BorderSide(color: Color(0xFFFFFFFF))),
+      margin: EdgeInsets.zero,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(8)), side: BorderSide(color: line)),
     ),
-    inputDecorationTheme: InputDecorationTheme(
+    dividerColor: line,
+    inputDecorationTheme: const InputDecorationTheme(
       filled: true,
-      fillColor: const Color(0xFFF7F4EE),
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(28), borderSide: const BorderSide(color: Color(0xFFE7E0D4))),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+      fillColor: Colors.white,
+      border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(8)), borderSide: BorderSide(color: line)),
+      contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 14),
     ),
     filledButtonTheme: FilledButtonThemeData(
       style: FilledButton.styleFrom(
         backgroundColor: navy,
         foregroundColor: Colors.white,
-        minimumSize: const Size(64, 52),
-        textStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+        minimumSize: const Size(64, 48),
+        textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       ),
     ),
   );

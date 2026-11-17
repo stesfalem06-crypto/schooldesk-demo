@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import 'api.dart';
 import 'app_state.dart';
+import 'money.dart';
 import 'saved_files.dart';
 import 'school_book.dart';
 import 'shell.dart';
@@ -49,7 +50,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               padding: const EdgeInsets.all(16),
               children: [
                 _stat('Students', '${head['students'] ?? 0}', 'Boys ${head['male'] ?? 0}  Girls ${head['female'] ?? 0}'),
-                _stat('Fees paid', '${finance['fees_collected'] ?? 0}', 'Still to pay ${finance['fees_remaining'] ?? 0}', color: passGreen),
+                _stat('Fees paid', nfk(finance['fees_collected']), 'Still to pay ${nfk(finance['fees_remaining'])}', color: passGreen),
                 _stat('Balance', '${finance['balance'] ?? 0}', 'Income ${finance['total_income'] ?? 0}  Spent ${finance['total_expense'] ?? 0}'),
               ],
             ),
@@ -141,7 +142,7 @@ class _MoneyScreenState extends State<MoneyScreen> {
         children: [
           Text('In ${f['total_income'] ?? '…'}    Out ${f['total_expense'] ?? '…'}', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
           Text('Balance ${f['balance'] ?? '…'}', style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800, color: ((f['balance'] as num?) ?? 0) >= 0 ? passGreen : failRed)),
-          Text('Fees ${f['fees_collected'] ?? 0} paid, ${f['fees_remaining'] ?? 0} left. Workshops ${f['workshops'] ?? 0}. Sports ${f['sports'] ?? 0}. Utility ${f['utility_fee'] ?? 0}.'),
+          Text('Fees ${nfk(f['fees_collected'])} paid, ${nfk(f['fees_remaining'])} left. Workshops ${nfk(f['workshops'])}. Sports ${nfk(f['sports'])}. Utility ${nfk(f['utility_fee'])}.'),
           const SizedBox(height: 8),
           Wrap(spacing: 8, children: [
             for (final item in [('incomes', 'In'), ('expenses', 'Out'), ('workshops', 'Workshops'), ('sports', 'Sports')])
@@ -152,7 +153,7 @@ class _MoneyScreenState extends State<MoneyScreen> {
           if (admin) Padding(padding: const EdgeInsets.only(top: 8), child: FilledButton(onPressed: add, child: const Text('Add'))),
           for (final row in rows.where((r) => query.isEmpty || '${r['source'] ?? ''} ${r['reason'] ?? ''} ${r['description'] ?? ''}'.toLowerCase().contains(query.toLowerCase())))
             Card(child: ListTile(
-              title: Text('${row['amount']}', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+              title: Text(nfk(row['amount']), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
               subtitle: Text('${row['source'] ?? row['reason'] ?? row['description'] ?? ''} · ${row['received_on'] ?? row['spent_on'] ?? row['attended_on'] ?? ''}', style: const TextStyle(fontSize: 16)),
             )),
         ],

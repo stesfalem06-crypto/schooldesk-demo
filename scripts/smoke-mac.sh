@@ -153,19 +153,24 @@ for w in info {
       echo "missing '$need' on $dest"
       exit 1
     fi
-    if [[ -z "$page" && -n "$role" ]] && ! printf '%s\n' "$text" | grep -q "Hello"; then
+    if [[ -z "$page" && -n "$role" ]] && ! printf '%s\n' "$text" | grep -q "Dashboard"; then
       echo "home page was blank on $dest"
       exit 1
     fi
   }
   OUT="$(dirname "$SHOT")"
-  capture admin "" "$OUT/admin-home.png" "Hello, School admin"
-  capture director "" "$OUT/director-home.png" "Hello, Director"
-  capture homeroom "" "$OUT/homeroom-home.png" "Hello, Samuel"
-  capture subject "" "$OUT/subject-home.png" "Hello, Meron"
-  capture admin fees "$OUT/fees.png" "Whole school"
+  capture admin "" "$OUT/admin-home.png" "Dashboard"
+  capture director "" "$OUT/director-home.png" "Dashboard"
+  capture homeroom "" "$OUT/homeroom-home.png" "Dashboard"
+  capture subject "" "$OUT/subject-home.png" "Dashboard"
+  capture admin students "$OUT/students.png" "Add a student"
   capture subject marks "$OUT/marks.png" "English"
-  capture admin results "$OUT/statistics.png" "Make statistics"
+  capture admin results "$OUT/results.png" "Make statistics"
+  capture admin fees "$OUT/fees.png" "Whole school"
+  capture admin attendance "$OUT/attendance.png" "Samuel"
+  capture homeroom timetable "$OUT/timetable.png" "Make the week"
+  capture director reports "$OUT/reports.png" "Save PDF"
+  capture admin staff "$OUT/staff.png" "Add a person"
   cp "$OUT/admin-home.png" "${SHOT%.png}-home.png"
 fi
 if [[ "$MODE" == "prod" ]]; then

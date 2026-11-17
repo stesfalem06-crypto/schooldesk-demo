@@ -15,7 +15,7 @@ class SoftCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       color: const Color(0xFFFCFAF6),
-      elevation: 2,
+      elevation: 0,
       shadowColor: const Color(0x140E2438),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(radius),

@@ -18,10 +18,7 @@ class ChooseRoleScreen extends StatelessWidget {
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
-          ClipRRect(
-            borderRadius: const BorderRadius.only(topLeft: Radius.circular(36), topRight: Radius.circular(72), bottomLeft: Radius.circular(64), bottomRight: Radius.circular(28)),
-            child: Image.asset('assets/hero-school.webp', height: 180, width: double.infinity, fit: BoxFit.cover),
-          ),
+          const Text('Pick the job you do today. You can switch later.', style: TextStyle(fontSize: 16)),
           const SizedBox(height: 16),
           _role(context, 'School admin', 'The whole school', 'admin'),
           _role(context, 'Director', 'Look and report', 'director'),

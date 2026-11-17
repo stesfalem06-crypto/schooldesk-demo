@@ -57,6 +57,7 @@ class AppModel extends ChangeNotifier {
   }
 
   Future<void> bootDemo() async {
+    final watch = Stopwatch()..start();
     await SchoolBook.open();
     school = SchoolBook.instance.schoolName;
     licensed = true;
@@ -64,6 +65,7 @@ class AppModel extends ChangeNotifier {
     final smoke = Platform.environment['SCHOOLDESK_SMOKE'] ?? _smokeFile();
     if (smoke == 'admin' || smoke == 'director' || smoke == 'homeroom' || smoke == 'subject') enterRole(smoke);
     smokePage = _marker('smoke-page');
+    logStartup('startup ${watch.elapsedMilliseconds} ms');
     notifyListeners();
   }
 
