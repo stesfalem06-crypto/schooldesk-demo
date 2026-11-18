@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'app_state.dart';
 import 'classes_page.dart';
 import 'demo_extra.dart';
+import 'erp_shell.dart';
 import 'money.dart';
 import 'office.dart';
 import 'screens.dart';
@@ -133,17 +134,22 @@ class _ErpDashboardState extends State<ErpDashboard> {
       final classes = asMaps(SchoolBook.instance.callNow('GET', '/api/v1/classes', null));
       final match = classes.where((c) => c['name'] == 'Grade 8A').toList();
       if (match.isEmpty) return;
-      Navigator.of(context).push(MaterialPageRoute(builder: (_) => ClassDetailScreen(id: match.first['id'].toString(), name: 'Grade 8A', focus: focus)));
+      DeskTrail.push(
+        context,
+        ClassDetailScreen(id: match.first['id'].toString(), name: 'Grade 8A', focus: focus),
+        nav: 'Classes',
+        crumbs: ['Classes', 'Grade 8A'],
+      );
       return;
     }
     if (page == 'find' || page == 'profile') {
-      final hits = asMaps(SchoolBook.instance.callNow('GET', '/api/v1/search?q=Abel', null));
-      final students = hits.where((h) => h['kind'] == 'student').toList();
+      final hits = asMaps(SchoolBook.instance.callNow('GET', '/api/v1/search?q=Abel%20Tesfaye', null));
+      final students = hits.where((h) => h['kind'] == 'student' && h['name'] == 'Abel Tesfaye').toList();
       if (students.isEmpty) return;
       if (page == 'profile') {
-        Navigator.of(context).push(MaterialPageRoute(builder: (_) => ProfileScreen(id: students.first['id'].toString())));
+        DeskTrail.push(context, ProfileScreen(id: students.first['id'].toString()), nav: 'Students', crumbs: ['Students', 'Abel Tesfaye']);
       } else {
-        Navigator.of(context).push(MaterialPageRoute(builder: (_) => SearchScreen(query: 'Abel')));
+        DeskTrail.push(context, SearchScreen(query: 'Abel Tesfaye'), nav: 'Students', crumbs: ['Students', 'Abel Tesfaye']);
       }
       return;
     }

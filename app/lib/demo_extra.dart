@@ -98,7 +98,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       title: s['full_name'].toString(),
       school: 'Hope Academy',
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 48),
         children: [
           SoftCard(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text('Class ${sheet?['class_name'] ?? ''}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
@@ -111,7 +111,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           const SizedBox(height: 8),
           const Text('Marks', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
           for (final mark in asMaps(sheet?['marks']))
-            Text('${mark['subject']}: ${mark['got']}/${mark['possible']}', style: const TextStyle(fontSize: 16)),
+            Text('${mark['subject']} ${mark['total']} / 100    CA ${mark['ca']} / 60    Final ${mark['exam']} / 40', style: const TextStyle(fontSize: 16)),
           const SizedBox(height: 8),
           const Text('Fees', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
           for (final fee in asMaps(sheet?['fees']))

@@ -35,11 +35,22 @@ void main() {
     book.setActor('homeroom');
     final results = await book.call('GET', '/api/v1/classes/${grade8['id']}/results', null) as Map;
     final ranks = (results['students'] as List).map((row) => (row as Map)['standing']['rank'] as int).toList();
-    expect(ranks.contains(1), isTrue);
-    expect(ranks.where((r) => r == 3).length, 2);
-    expect(ranks.contains(4), isFalse);
-    expect(ranks.contains(5), isTrue);
+    expect(ranks.where((r) => r == 1).length, 1);
+    expect(ranks.where((r) => r == 2).length, 2);
+    expect(ranks.contains(3), isFalse);
+    expect(ranks.contains(4), isTrue);
+    book.setActor('admin');
+    final sheet = await book.call('GET', '/api/v1/classes/${grade8['id']}/sheet', null) as Map;
+    final tableRanks = (sheet['rows'] as List).where((row) => (row as Map)['rank'] is int).take(4).map((row) => (row as Map)['rank']).toList();
+    expect(tableRanks, [1, 2, 2, 4]);
+    final abel = (await book.call('GET', '/api/v1/search?q=Abel%20Tesfaye', null) as List).cast<Map>().firstWhere((hit) => hit['name'] == 'Abel Tesfaye');
+    final profile = await book.call('GET', '/api/v1/students/${abel['id']}/sheet', null) as Map;
+    final marks = (profile['marks'] as List).cast<Map>();
+    expect(marks.every((mark) => (mark['total'] as num) > 0), isTrue);
+    expect(marks.map((mark) => mark['total']).toSet().length, greaterThan(1));
+    expect(profile['student']['father_name'].toString().startsWith('Liya'), isFalse);
     final pupil = (results['students'] as List).first as Map;
+    book.setActor('homeroom');
     expect(
       () => book.call('POST', '/api/v1/students/${pupil['student']['id']}/dropout', {'dropped': true, 'reason': 'away', 'date': '2026-11-01'}),
       returnsNormally,

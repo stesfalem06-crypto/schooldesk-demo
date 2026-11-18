@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import 'api.dart';
 import 'app_state.dart';
+import 'erp_shell.dart';
 import 'money.dart';
 import 'shell.dart';
 import 'theme.dart';
@@ -53,7 +54,7 @@ class _ClassesScreenState extends State<ClassesScreen> {
                 return Card(
                   child: InkWell(
                     key: Key('class-${cls['name']}'),
-                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ClassDetailScreen(id: cls['id'].toString(), name: cls['name'].toString()))),
+                    onTap: () => DeskTrail.push(context, ClassDetailScreen(id: cls['id'].toString(), name: cls['name'].toString()), nav: 'Classes', crumbs: ['Classes', cls['name'].toString()]),
                     child: Padding(
                       padding: const EdgeInsets.all(12),
                       child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -81,6 +82,7 @@ class ClassDetailScreen extends StatefulWidget {
 class _ClassDetailScreenState extends State<ClassDetailScreen> {
   Map<String, dynamic>? sheet;
   String? error;
+  late String section = widget.focus == 'fees' ? 'Fees' : widget.focus == 'marks' ? 'Marks' : 'Teachers';
 
   @override
   void initState() {
@@ -110,22 +112,27 @@ class _ClassDetailScreenState extends State<ClassDetailScreen> {
     final fees = asMaps(data['fees']);
     final rows = asMaps(data['rows']);
     final subjects = (data['subjects'] as List?)?.map((e) => e.toString()).toList() ?? [];
-    final showFees = widget.focus != 'marks';
-    final showMarks = widget.focus != 'fees';
+    final topRanks = rows.where((row) => row['rank'] is int).take(4).map((row) => row['rank']).join(', ');
     return SchoolScaffold(
       title: widget.name,
       hint: 'Homeroom ${data['homeroom'] ?? ''}',
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 48),
         children: [
           Text('${head['active'] ?? 0} students · ${head['male'] ?? 0} boys · ${head['female'] ?? 0} girls · ${head['dropped'] ?? 0} left', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
           const SizedBox(height: 12),
-          const Text('Teachers', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
-          const SizedBox(height: 6),
-          Text('Homeroom teacher: ${data['homeroom'] ?? ''}', style: const TextStyle(fontSize: 16)),
-          for (final lesson in teachers) Text('${lesson['subject']}: ${lesson['teacher']}', style: const TextStyle(fontSize: 16)),
-          if (showFees) ...[
-            const SizedBox(height: 16),
+          Wrap(spacing: 8, children: [
+            for (final label in ['Teachers', 'Fees', 'Marks'])
+              ChoiceChip(label: Text(label), selected: section == label, onSelected: (_) => setState(() => section = label)),
+          ]),
+          const SizedBox(height: 12),
+          if (section == 'Teachers') ...[
+            const Text('Teachers', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+            const SizedBox(height: 6),
+            Text('Homeroom teacher: ${data['homeroom'] ?? ''}', style: const TextStyle(fontSize: 16)),
+            for (final lesson in teachers) Text('${lesson['subject']}: ${lesson['teacher']}', style: const TextStyle(fontSize: 16)),
+          ],
+          if (section == 'Fees') ...[
             const Text('Fees', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
             const SizedBox(height: 6),
             for (final fee in fees)
@@ -136,9 +143,10 @@ class _ClassDetailScreenState extends State<ClassDetailScreen> {
                 ),
               ),
           ],
-          if (showMarks) ...[
-            const SizedBox(height: 16),
+          if (section == 'Marks') ...[
             const Text('Marks', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+            Text('Each mark is out of 100. CA is out of 60 and the final is out of 40.', style: const TextStyle(fontSize: 15, color: Color(0xFF5C6B7A))),
+            Text('Ranks $topRanks', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
             const SizedBox(height: 6),
             _marks(subjects, rows),
           ],
@@ -148,13 +156,13 @@ class _ClassDetailScreenState extends State<ClassDetailScreen> {
   }
 
   Widget _marks(List<String> subjects, List<Map<String, dynamic>> rows) {
-    const nameWidth = 160.0;
-    const col = 108.0;
+    const nameWidth = 170.0;
+    const col = 148.0;
     Widget cell(String text, {bool head = false, bool left = false}) {
       return Container(
         width: left ? nameWidth : col,
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-        child: Text(text, style: TextStyle(fontSize: 14, fontWeight: head ? FontWeight.w800 : FontWeight.w600, color: left && !head ? failRed : ink)),
+        child: Text(text, maxLines: 1, softWrap: false, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 14, fontWeight: head ? FontWeight.w800 : FontWeight.w600, color: left && !head ? failRed : ink)),
       );
     }
     return Card(
@@ -184,9 +192,9 @@ class _ClassDetailScreenState extends State<ClassDetailScreen> {
     final marks = row['marks'];
     if (marks is! Map || marks[subject] is! Map) return '—';
     final mark = Map<String, dynamic>.from(marks[subject] as Map);
-    final possible = (mark['possible'] as num?)?.toDouble() ?? 0;
-    if (possible <= 0) return '—';
-    return '${mark['got']}/$possible';
+    final total = mark['total'];
+    if (total == null) return '—';
+    return '$total/100';
   }
 }
 

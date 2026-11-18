@@ -49,7 +49,7 @@ class SchoolBook {
     if (_file.existsSync()) {
       try {
         final decoded = jsonDecode(_file.readAsStringSync());
-        if (decoded is Map && decoded['seed'] == 6) {
+        if (decoded is Map && decoded['seed'] == 7) {
           state = Map<String, dynamic>.from(_norm(decoded) as Map);
           return;
         }
@@ -1074,7 +1074,7 @@ class SchoolBook {
 
   Map<String, dynamic> _fresh() {
     state = {
-      'seed': 6,
+      'seed': 7,
       'seq': 0,
       'settings': {
         'academic_year': '2026',
@@ -1196,7 +1196,9 @@ class SchoolBook {
     }
     person('Hanna Desta', 'F', 'non-teaching', 'diploma');
     person('Kaleb Worku', 'M', 'non-teaching', 'certificate');
-    const factors = [1.0, 0.85, 0.85, 0.70, 0.50, 0.40, 0.95, 0.60, 0.30, 0.75];
+    const factors = [0.92, 0.80, 0.80, 0.68, 0.58, 0.52, 0.47, 0.42, 0.36, 0.30];
+    const fatherFirst = ['Abebe', 'Dawit', 'Yonas', 'Kaleb', 'Elias', 'Biruk', 'Henok', 'Nahom', 'Noah', 'Samuel', 'Girma', 'Tesfaye', 'Worku', 'Bekele', 'Hailu'];
+    const subjectShift = {'Mathematics': 0.0, 'English': 0.05, 'Science': -0.04, 'Social studies': 0.02};
     final classList = _classes();
     var pupilNo = 0;
     for (final cls in classList) {
@@ -1212,7 +1214,7 @@ class SchoolBook {
           'dropped_out': cls['name'] == 'Grade 12A' && n == 9,
           'dropout_reason': cls['name'] == 'Grade 12A' && n == 9 ? 'Moved away' : '',
           'dropout_date': cls['name'] == 'Grade 12A' && n == 9 ? '2026-10-02' : '',
-          'father_name': '${first[(pupilNo + 5) % first.length]} ${last[(pupilNo + 2) % last.length]}',
+          'father_name': '${fatherFirst[pupilNo % fatherFirst.length]} ${last[(pupilNo + 2) % last.length]}',
           'phone': '09${(11000000 + pupilNo).toString()}',
           'address': 'Hope neighbourhood',
           'remark': n == 0 ? 'A steady worker. Keep it up.' : '',
@@ -1220,9 +1222,11 @@ class SchoolBook {
         _push('students', student);
         final factor = factors[n];
         for (final lesson in _lessons().where((l) => l['class_id'] == cls['id'])) {
+          final shift = subjectShift[lesson['subject_name']] ?? 0.0;
+          final level = (factor + shift).clamp(0.2, 1.0);
           for (final assessment in (state['assessments'] as List).where((a) => (a as Map)['class_subject_id'] == lesson['id'])) {
             final max = ((assessment as Map)['max_marks'] as num).toDouble();
-            final score = round2(max * factor);
+            final score = round2(max * level);
             _push('scores', {'id': _id('sc'), 'assessment_id': assessment['id'], 'student_id': student['id'], 'score': score > max ? max : score, 'revision': 1, 'updated_at': ''});
           }
         }
@@ -1276,20 +1280,13 @@ class SchoolBook {
     _push('calendar', {'id': _id('cal'), 'date': '2026-12-24', 'title': 'Holiday', 'kind': 'holiday'});
   }
 
-  Map<String, dynamic> _runningMark(Map<String, dynamic> lesson, String studentId) {
-    _ensureIndex();
-    final assessments = _assessmentsByLesson![lesson['id'].toString()] ?? const <Map<String, dynamic>>[];
-    var got = 0.0;
-    var possible = 0.0;
-    var entered = 0;
-    for (final assessment in assessments) {
-      final score = _scoreIndex![assessment['id'].toString()]?[studentId];
-      if (score == null || score['score'] == null) continue;
-      got += (score['score'] as num).toDouble();
-      possible += (assessment['max_marks'] as num?)?.toDouble() ?? 0;
-      entered++;
-    }
-    return {'got': round2(got), 'possible': round2(possible), 'entered': entered};
+  Map<String, dynamic> _scaledMark(Map<String, dynamic> lesson, String studentId) {
+    final mark = _subjectMark(lesson, studentId);
+    return {
+      'ca': mark.continuous.round(),
+      'exam': mark.exam.round(),
+      'total': mark.total.round(),
+    };
   }
 
   Map<String, dynamic> _classSheet(String classId) {
@@ -1330,39 +1327,44 @@ class SchoolBook {
       });
     }
     final subjects = [for (final lesson in lessons) lesson['subject_name'].toString()];
-    final rows = <Map<String, dynamic>>[];
+    final standingInput = <Map<String, dynamic>>[];
+    final marksByStudent = <String, Map<String, Map<String, dynamic>>>{};
     for (final student in pupils) {
       final marks = <String, Map<String, dynamic>>{};
-      var percents = <double>[];
+      final totals = <double>[];
       for (final lesson in lessons) {
-        final mark = _runningMark(lesson, student['id'].toString());
+        final mark = _scaledMark(lesson, student['id'].toString());
         marks[lesson['subject_name'].toString()] = mark;
-        final possible = (mark['possible'] as num).toDouble();
-        if (possible > 0) percents.add((mark['got'] as num).toDouble() / possible);
+        totals.add((mark['total'] as num).toDouble());
       }
-      final average = percents.isEmpty ? 0.0 : percents.reduce((a, b) => a + b) / percents.length;
+      marksByStudent[student['id'].toString()] = marks;
+      standingInput.add({
+        'id': student['id'],
+        'totals': totals,
+        'dropout': student['dropped_out'] == true,
+        'level': cls['level'],
+      });
+    }
+    final places = standings(standingInput, Map<String, dynamic>.from((state['settings'] as Map)['fail_limits'] as Map));
+    final rows = <Map<String, dynamic>>[];
+    for (final place in places) {
+      final student = _byId(pupils, place.id);
       rows.add({
         'id': student['id'],
         'name': student['full_name'],
         'sex': student['sex'],
         'dropped': student['dropped_out'] == true,
-        'marks': marks,
-        'average': round2(average * 100),
+        'marks': marksByStudent[place.id] ?? {},
+        'average': place.average.round(),
+        'rank': place.status == 'dropout' ? '' : place.rank,
       });
     }
-    final ranked = rows.where((row) => row['dropped'] != true).toList()
-      ..sort((a, b) => (b['average'] as num).compareTo(a['average'] as num));
-    var place = 0;
-    num? previous;
-    for (var i = 0; i < ranked.length; i++) {
-      final average = ranked[i]['average'] as num;
-      if (previous == null || average != previous) place = i + 1;
-      ranked[i]['rank'] = place;
-      previous = average;
-    }
-    for (final row in rows) {
-      row['rank'] ??= '';
-    }
+    rows.sort((a, b) {
+      final ar = a['rank'] is int ? a['rank'] as int : 999;
+      final br = b['rank'] is int ? b['rank'] as int : 999;
+      if (ar != br) return ar.compareTo(br);
+      return a['name'].toString().compareTo(b['name'].toString());
+    });
     return {
       'class': cls,
       'homeroom': cls['homeroom_name'],
@@ -1386,7 +1388,7 @@ class SchoolBook {
     final lessons = _lessons().where((l) => l['class_id'].toString() == cls['id'].toString()).toList();
     final marks = <Map<String, dynamic>>[];
     for (final lesson in lessons) {
-      final mark = _runningMark(lesson, studentId);
+      final mark = _scaledMark(lesson, studentId);
       marks.add({'subject': lesson['subject_name'], 'teacher': lesson['teacher_name'], ...mark});
     }
     final fees = <Map<String, dynamic>>[];

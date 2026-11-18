@@ -23,11 +23,33 @@ class ErpShell extends StatefulWidget {
   State<ErpShell> createState() => ErpShellState();
 }
 
+class DeskTrail {
+  static void push(BuildContext context, Widget page, {required String nav, required List<String> crumbs}) {
+    Navigator.of(context).push(MaterialPageRoute(
+      settings: RouteSettings(arguments: {'nav': nav, 'crumbs': crumbs}),
+      builder: (_) => page,
+    ));
+  }
+}
+
 class ErpShellState extends State<ErpShell> {
   final _search = TextEditingController();
   List<Map<String, dynamic>> _hits = [];
   GlobalKey<NavigatorState> _navKey = GlobalKey<NavigatorState>();
+  late final _TrailObserver _observer = _TrailObserver(this);
   int _navFor = -1;
+  List<String> _crumbs = [];
+  String? _navLabel;
+
+  void applyTrail(List<String> crumbs, String? nav) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      setState(() {
+        _crumbs = crumbs;
+        _navLabel = nav;
+      });
+    });
+  }
 
   @override
   void dispose() {
@@ -36,6 +58,12 @@ class ErpShellState extends State<ErpShell> {
   }
 
   String get section => widget.index == 0 ? 'Dashboard' : widget.items[widget.index - 1].label;
+
+  int get _highlight {
+    if (_navLabel == null) return widget.index;
+    final i = widget.items.indexWhere((item) => item.label == _navLabel);
+    return i < 0 ? -1 : i + 1;
+  }
 
   void _openSearch(String query) {
     final text = query.trim();
@@ -56,7 +84,10 @@ class ErpShellState extends State<ErpShell> {
   void _openHit(Map<String, dynamic> hit) {
     setState(() => _hits = []);
     _search.clear();
-    _navKey.currentState?.push(MaterialPageRoute(builder: (_) => ProfileScreen(id: hit['id'].toString())));
+    _navKey.currentState?.push(MaterialPageRoute(
+      settings: RouteSettings(arguments: {'nav': 'Students', 'crumbs': ['Students', hit['name'].toString()]}),
+      builder: (_) => ProfileScreen(id: hit['id'].toString()),
+    ));
   }
 
   @override
@@ -69,7 +100,7 @@ class ErpShellState extends State<ErpShell> {
     return Material(
       color: const Color(0xFFF4F6F8),
       child: Row(children: [
-        _Side(items: widget.items, index: widget.index, onSelect: widget.onSelect),
+        _Side(items: widget.items, index: _highlight, onSelect: widget.onSelect),
         Expanded(
           child: Column(children: [
             _Top(model: model, search: _search, onSearch: _openSearch, hits: _hits, onHit: _openHit),
@@ -77,13 +108,14 @@ class ErpShellState extends State<ErpShell> {
               width: double.infinity,
               color: Colors.white,
               padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
-              child: Text('Home  /  $section', style: const TextStyle(fontSize: 15, color: Color(0xFF5C6B7A))),
+              child: Text('Home  /  ${(_crumbs.isEmpty ? [section] : _crumbs).join('  /  ')}', style: const TextStyle(fontSize: 15, color: Color(0xFF5C6B7A))),
             ),
             const Divider(height: 1, color: line),
             Expanded(
               child: Navigator(
                 key: _navKey,
-                onGenerateRoute: (_) => MaterialPageRoute(builder: (_) => widget.child),
+                observers: [_observer],
+                onGenerateRoute: (settings) => MaterialPageRoute(settings: settings, builder: (_) => widget.child),
               ),
             ),
             const SchoolFooter(),
@@ -200,4 +232,30 @@ class _Side extends StatelessWidget {
       ),
     );
   }
+}
+
+class _TrailObserver extends NavigatorObserver {
+  _TrailObserver(this.shell);
+  final ErpShellState shell;
+
+  void _sync(Route<dynamic>? route) {
+    final args = route?.settings.arguments;
+    if (args is Map && args['crumbs'] is List) {
+      shell.applyTrail(List<String>.from(args['crumbs'] as List), args['nav']?.toString());
+    } else {
+      shell.applyTrail(const [], null);
+    }
+  }
+
+  @override
+  void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    if (previousRoute == null) return;
+    _sync(route);
+  }
+
+  @override
+  void didPop(Route<dynamic> route, Route<dynamic>? previousRoute) => _sync(previousRoute);
+
+  @override
+  void didReplace({Route<dynamic>? newRoute, Route<dynamic>? oldRoute}) => _sync(newRoute);
 }
