@@ -831,7 +831,7 @@ class _SetupScreenState extends State<SetupScreen> {
           for (final cls in classes)
             Card(child: ListTile(
               title: Text(cls['name'].toString(), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
-              subtitle: Text('Grade ${cls['grade']} · ${cls['homeroom_name'] ?? ''}'),
+              subtitle: Text(cls['homeroom_name']?.toString() ?? ''),
               trailing: const Icon(Icons.edit),
               onTap: () => rename(cls),
             )),

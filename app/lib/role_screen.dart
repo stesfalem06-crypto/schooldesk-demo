@@ -22,8 +22,8 @@ class ChooseRoleScreen extends StatelessWidget {
           const SizedBox(height: 16),
           _role(context, 'School admin', 'The whole school', 'admin'),
           _role(context, 'Director', 'Look and report', 'director'),
-          _role(context, 'Homeroom teacher', 'Samuel, Grade 8A', 'homeroom'),
-          _role(context, 'Subject teacher', 'Meron, English', 'subject'),
+          _role(context, 'Homeroom teacher', 'Tesfay, 8-1', 'homeroom'),
+          _role(context, 'Subject teacher', 'Mehret, English', 'subject'),
           const SizedBox(height: 8),
           OutlinedButton(
             onPressed: () async {

@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import 'api.dart';
 import 'app_state.dart';
+import 'roll_entry.dart';
 import 'shell.dart';
 import 'theme.dart';
 import 'widgets.dart';
@@ -77,10 +78,14 @@ class _MarkGridScreenState extends State<MarkGridScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final active = students.where((s) => s['dropped_out'] != true).toList();
+    final active = students.where((s) => s['dropped_out'] != true).toList()
+      ..sort((a, b) => ((a['roll_no'] as num?) ?? 0).compareTo((b['roll_no'] as num?) ?? 0));
     return SchoolScaffold(
       title: widget.subject['subject_name']?.toString() ?? 'Marks',
       hint: canEdit ? 'Type a mark and move to the next box. It saves itself.' : 'You can look. Only the subject teacher changes these marks.',
+      actions: [
+        TextButton(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => RollMarkScreen(smokeClassName: widget.subject['class_name']?.toString()))), child: const Text('By roll number')),
+      ],
       school: context.watch<AppModel>().school,
       body: loading
           ? const Center(child: CircularProgressIndicator())
@@ -95,6 +100,7 @@ class _MarkGridScreenState extends State<MarkGridScreen> {
                         dataRowMinHeight: 64,
                         dataRowMaxHeight: 96,
                         columns: [
+                          const DataColumn(label: Text('No.', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800))),
                           const DataColumn(label: Text('Student', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800))),
                           for (final col in columns)
                             DataColumn(label: Text(_colTitle(col), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800))),
@@ -103,6 +109,7 @@ class _MarkGridScreenState extends State<MarkGridScreen> {
                         rows: [
                           for (final student in active)
                             DataRow(cells: [
+                              DataCell(Text('${student['roll_no'] ?? ''}', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800))),
                               DataCell(Text(student['full_name'].toString(), style: const TextStyle(fontSize: 16))),
                               for (final col in columns) DataCell(_box(student, col)),
                               DataCell(Text(_total(student), style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: _failing(student) ? failRed : passGreen))),

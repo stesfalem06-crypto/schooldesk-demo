@@ -15,11 +15,9 @@ import 'widgets.dart';
 const _dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 int _classOrder(String name) {
-  final match = RegExp(r'(\d+)\s*([A-Za-z])?').firstMatch(name);
+  final match = RegExp(r'(\d+)\s*-\s*(\d+)').firstMatch(name);
   if (match == null) return 100000;
-  final number = int.parse(match.group(1)!);
-  final letter = match.group(2)?.toUpperCase() ?? '';
-  return number * 100 + (letter.isEmpty ? 0 : letter.codeUnitAt(0));
+  return int.parse(match.group(1)!) * 100 + int.parse(match.group(2)!);
 }
 
 class TimetableScreen extends StatefulWidget {
@@ -167,7 +165,7 @@ class _TimetableScreenState extends State<TimetableScreen> {
       if (step == 2) ...[
         const Text('Add one lesson', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
         const SizedBox(height: 8),
-        TextField(controller: className, decoration: const InputDecoration(labelText: 'Class name, like Grade 3A')),
+        TextField(controller: className, decoration: const InputDecoration(labelText: 'Class name, like 3-1')),
         const SizedBox(height: 8),
         const Text('Grade', style: TextStyle(fontWeight: FontWeight.w700)),
         Wrap(spacing: 6, children: [

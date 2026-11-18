@@ -5,9 +5,10 @@ import 'package:provider/provider.dart';
 
 import 'app_state.dart';
 import 'demo_look.dart';
+import 'data_grid.dart';
 import 'money.dart';
-import 'saved_files.dart';
 import 'school_book.dart';
+import 'saved_files.dart';
 import 'shell.dart';
 import 'theme.dart';
 import 'widgets.dart';
@@ -101,7 +102,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 48),
         children: [
           SoftCard(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('Class ${sheet?['class_name'] ?? ''}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+            Text('Roll no. ${sheet?['roll_no'] ?? ''}, Class ${sheet?['class_name'] ?? ''}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
             Text('Homeroom teacher ${sheet?['homeroom'] ?? ''}', style: const TextStyle(fontSize: 18)),
             Text('Mother ${s['mother_name'] ?? ''}', style: const TextStyle(fontSize: 18)),
             Text('Father ${s['father_name'] ?? ''}', style: const TextStyle(fontSize: 18)),
@@ -110,8 +111,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ])),
           const SizedBox(height: 8),
           const Text('Marks', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
-          for (final mark in asMaps(sheet?['marks']))
-            Text('${mark['subject']} ${mark['total']} / 100    CA ${mark['ca']} / 60    Final ${mark['exam']} / 40', style: const TextStyle(fontSize: 16)),
+          DataGrid(
+            expand: false,
+            columns: const [
+              GridCol('Subject', 180, TextAlign.left),
+              GridCol('CA / 60', 110, TextAlign.right),
+              GridCol('Final / 40', 120, TextAlign.right),
+              GridCol('Total / 100', 130, TextAlign.right),
+            ],
+            rows: [
+              for (final mark in asMaps(sheet?['marks']))
+                ['${mark['subject']}', '${mark['ca']}', '${mark['exam']}', '${mark['total']}'],
+            ],
+          ),
           const SizedBox(height: 8),
           const Text('Fees', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
           for (final fee in asMaps(sheet?['fees']))
@@ -241,31 +253,81 @@ class _CalendarScreenState extends State<CalendarScreen> {
 }
 
 class AttendanceScreen extends StatefulWidget {
-  const AttendanceScreen({super.key});
+  const AttendanceScreen({super.key, this.smokeClassName, this.smokeNumbers});
+  final String? smokeClassName;
+  final String? smokeNumbers;
   @override
   State<AttendanceScreen> createState() => _AttendanceScreenState();
 }
 
 class _AttendanceScreenState extends State<AttendanceScreen> {
   Map<String, dynamic>? data;
+  List<Map<String, dynamic>> classes = [];
+  String? classId;
+  final dateBox = TextEditingController();
+  final numbers = TextEditingController();
+  var smokeSaved = false;
 
   @override
   void initState() {
     super.initState();
+    dateBox.text = _day();
+    numbers.text = widget.smokeNumbers ?? '';
     load();
+  }
+
+  @override
+  void dispose() {
+    dateBox.dispose();
+    numbers.dispose();
+    super.dispose();
   }
 
   Future<void> load() async {
     final model = context.read<AppModel>();
-    final classId = model.homerooms.isEmpty ? '' : model.homerooms.first;
-    data = Map<String, dynamic>.from(await model.ask((api) => api.get('/api/v1/attendance?class_id=$classId&date=${_day()}')) as Map);
+    if (model.seesSchool) {
+      classes = asMaps(await model.ask((api) => api.get('/api/v1/classes')));
+    }
+    classId ??= _firstClass(model);
+    if (classId == null || classId!.isEmpty) {
+      if (mounted) setState(() {});
+      return;
+    }
+    data = Map<String, dynamic>.from(await model.ask((api) => api.get('/api/v1/attendance?class_id=$classId&date=${dateBox.text.trim()}')) as Map);
     if (mounted) setState(() {});
+    if (!smokeSaved && widget.smokeNumbers != null && widget.smokeNumbers!.isNotEmpty) {
+      smokeSaved = true;
+      await saveNumbers();
+    }
+  }
+
+  String? _firstClass(AppModel model) {
+    if (widget.smokeClassName != null) {
+      final match = classes.where((c) => c['name'] == widget.smokeClassName).toList();
+      if (match.isNotEmpty) return match.first['id'].toString();
+    }
+    if (model.homerooms.isNotEmpty) return model.homerooms.first;
+    return classes.isEmpty ? null : classes.first['id'].toString();
+  }
+
+  List<Map<String, dynamic>> get _matched {
+    final students = asMaps(data?['students']);
+    final byRoll = {for (final student in students) (student['roll_no'] as num?)?.toInt() ?? 0: student};
+    return [for (final number in parseRollNumbers(numbers.text)) if (byRoll[number] != null) byRoll[number]!];
+  }
+
+  List<int> get _unknown {
+    final students = asMaps(data?['students']);
+    final known = {for (final student in students) (student['roll_no'] as num?)?.toInt() ?? 0};
+    return [for (final number in parseRollNumbers(numbers.text)) if (!known.contains(number)) number];
   }
 
   @override
   Widget build(BuildContext context) {
     final students = asMaps(data?['students']);
     final marks = asMaps(data?['marks']);
+    final matched = _matched;
+    final unknown = _unknown;
     return SchoolScaffold(
       title: 'Attendance',
       hint: 'This month ${data?['percent'] ?? 0}%',
@@ -274,10 +336,36 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
         padding: const EdgeInsets.all(16),
         children: [
           Text('Present today ${data?['present'] ?? 0}', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: navy)),
+          if (classes.isNotEmpty)
+            DropdownButton<String>(
+              value: classId,
+              items: [for (final cls in classes) DropdownMenuItem(value: cls['id'].toString(), child: Text(cls['name'].toString()))],
+              onChanged: (value) {
+                classId = value;
+                load();
+              },
+            ),
+          TextField(controller: dateBox, decoration: const InputDecoration(labelText: 'Date'), onSubmitted: (_) => load()),
+          TextField(
+            controller: numbers,
+            decoration: const InputDecoration(labelText: 'Absent roll numbers', hintText: '2, 5 or 4-6'),
+            onChanged: (_) => setState(() {}),
+          ),
+          if (matched.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text('Absent today: ${matched.map((s) => s['full_name']).join(', ')}', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+            for (final student in matched) Text('${student['roll_no']} ${student['full_name']}', style: const TextStyle(fontSize: 16)),
+          ],
+          if (unknown.isNotEmpty) Text('No student with number ${unknown.join(', ')}', style: const TextStyle(fontSize: 16, color: failRed, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 8),
+          FilledButton(onPressed: saveNumbers, child: const Text('Save absences')),
           if (data?['saved'] != null) Text(data!['saved'].toString(), style: const TextStyle(fontSize: 16)),
+          const SizedBox(height: 12),
+          const Text('Or mark one student', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
           for (final student in students)
             SoftCard(
               child: Row(children: [
+                SizedBox(width: 36, child: Text('${student['roll_no'] ?? ''}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800))),
                 Expanded(child: Text(student['full_name'].toString(), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700))),
                 FilledButton(
                   onPressed: () => mark(student['id'].toString(), true),
@@ -288,6 +376,22 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
         ],
       ),
     );
+  }
+
+  Future<void> saveNumbers() async {
+    if (classId == null) return;
+    final model = context.read<AppModel>();
+    final body = {'class_id': classId, 'date': dateBox.text.trim(), 'text': numbers.text};
+    Map<String, dynamic> saved;
+    if (Platform.environment['FLUTTER_TEST'] == 'true') {
+      saved = Map<String, dynamic>.from(SchoolBook.instance.callNow('POST', '/api/v1/attendance/numbers', body) as Map);
+    } else {
+      saved = Map<String, dynamic>.from(await model.ask((api) => api.post('/api/v1/attendance/numbers', body)) as Map);
+    }
+    final names = asMaps(saved['matched']).map((row) => row['full_name']).join(', ');
+    data = {...?data, 'saved': names.isEmpty ? 'No absences to save' : 'Absent today: $names'};
+    if (mounted) setState(() {});
+    if (Platform.environment['FLUTTER_TEST'] != 'true') await load();
   }
 
   bool _here(List<Map<String, dynamic>> marks, String id) {

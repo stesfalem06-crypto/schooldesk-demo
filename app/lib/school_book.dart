@@ -4,6 +4,33 @@ import 'dart:io';
 import 'api.dart';
 import 'school_rules.dart';
 
+const demoSource = 'mac-demo';
+
+List<int> parseRollNumbers(String text) {
+  final prepared = text.replaceAllMapped(RegExp(r'(\d+)\s*-\s*(\d+)'), (match) => '${match.group(1)}-${match.group(2)}');
+  final found = <int>[];
+  for (final part in prepared.split(RegExp(r'[,\s]+'))) {
+    if (part.isEmpty) continue;
+    final range = RegExp(r'^(\d+)-(\d+)$').firstMatch(part);
+    if (range != null) {
+      var start = int.parse(range.group(1)!);
+      var end = int.parse(range.group(2)!);
+      if (start > end) {
+        final swap = start;
+        start = end;
+        end = swap;
+      }
+      for (var n = start; n <= end; n++) {
+        found.add(n);
+      }
+      continue;
+    }
+    final number = int.tryParse(part);
+    if (number != null) found.add(number);
+  }
+  return found;
+}
+
 class SchoolBook {
   SchoolBook(this.directory);
 
@@ -49,7 +76,7 @@ class SchoolBook {
     if (_file.existsSync()) {
       try {
         final decoded = jsonDecode(_file.readAsStringSync());
-        if (decoded is Map && decoded['seed'] == 7) {
+        if (decoded is Map && decoded['seed'] == 8) {
           state = Map<String, dynamic>.from(_norm(decoded) as Map);
           return;
         }
@@ -104,27 +131,27 @@ class SchoolBook {
 
   Map<String, dynamic> _person(String key) {
     if (key == 'admin') {
-      return {'role': 'admin', 'display_name': 'School admin', 'staff_id': '', 'homeroom_class_ids': <String>[], 'teaching_ids': <String>[]};
+      return {'role': 'admin', 'display_name': 'Awet Gebremichael', 'staff_id': '', 'homeroom_class_ids': <String>[], 'teaching_ids': <String>[]};
     }
     if (key == 'director') {
-      return {'role': 'director', 'display_name': 'Director', 'staff_id': '', 'homeroom_class_ids': <String>[], 'teaching_ids': <String>[]};
+      return {'role': 'director', 'display_name': 'Solomon Tesfamariam', 'staff_id': '', 'homeroom_class_ids': <String>[], 'teaching_ids': <String>[]};
     }
     if (key == 'homeroom') {
-      final cls = _byName(_classes(), 'Grade 8A');
+      final cls = _byName(_classes(), '8-1');
       final staffId = cls['homeroom_staff_id'].toString();
       return {
         'role': 'teacher',
-        'display_name': 'Samuel',
+        'display_name': 'Tesfay',
         'staff_id': staffId,
         'homeroom_class_ids': [cls['id'].toString()],
         'teaching_ids': _teachingIds(staffId),
       };
     }
-    final meron = _byName(_staff(), 'Meron Alemu');
-    final staffId = meron['id'].toString();
+    final english = _byName(_staff(), 'Mehret Kahsay');
+    final staffId = english['id'].toString();
     return {
       'role': 'teacher',
-      'display_name': 'Meron',
+      'display_name': 'Mehret',
       'staff_id': staffId,
       'homeroom_class_ids': <String>[],
       'teaching_ids': _teachingIds(staffId),
@@ -229,6 +256,8 @@ class SchoolBook {
     if (method == 'POST' && tail == 'promote') return _promote(body);
     if (method == 'GET' && tail == 'attendance') return _attendance(query['class_id'], query['date']);
     if (method == 'POST' && tail == 'attendance') return _markAttendance(body);
+    if (method == 'POST' && tail == 'attendance/numbers') return _markAbsentNumbers(body);
+    if (method == 'POST' && tail.startsWith('classes/') && tail.endsWith('/renumber')) return _renumber(tail.split('/')[1]);
     if (method == 'PUT' && tail.startsWith('students/') && tail.endsWith('/profile')) return _saveProfile(tail.split('/')[1], body);
     throw ApiException('That did not work');
   }
@@ -325,6 +354,11 @@ class SchoolBook {
       final taught = _lessons().where((l) => l['teacher_staff_id'].toString() == _require()['staff_id']).map((l) => l['class_id'].toString()).toSet();
       rows = rows.where((s) => homes.contains(s['class_id'].toString()) || taught.contains(s['class_id'].toString())).toList();
     }
+    rows.sort((a, b) {
+      final byClass = a['class_id'].toString().compareTo(b['class_id'].toString());
+      if (byClass != 0) return byClass;
+      return ((a['roll_no'] as num?) ?? 0).compareTo((b['roll_no'] as num?) ?? 0);
+    });
     return rows;
   }
 
@@ -333,12 +367,19 @@ class SchoolBook {
     if (!_homes().contains(classId) && !_isAdmin()) {
       throw ApiException('Only the homeroom teacher can change this list');
     }
+    final mates = _pupils().where((s) => s['class_id'].toString() == classId);
+    var nextRoll = 0;
+    for (final mate in mates) {
+      final roll = (mate['roll_no'] as num?)?.toInt() ?? 0;
+      if (roll > nextRoll) nextRoll = roll;
+    }
     final row = {
       'id': _id('p'),
       'full_name': body['full_name']?.toString() ?? '',
       'sex': body['sex']?.toString() ?? 'F',
       'mother_name': body['mother_name']?.toString() ?? '',
       'class_id': classId,
+      'roll_no': nextRoll + 1,
       'dropped_out': false,
       'dropout_reason': '',
       'dropout_date': '',
@@ -478,17 +519,34 @@ class SchoolBook {
     final max = (assessment['max_marks'] as num).toDouble();
     final score = (body['score'] as num?)?.toDouble();
     if (score == null || score < 0 || score > max) throw ApiException('Enter a number from 0 to $max');
+    final student = _byId(_pupils(), body['student_id'].toString());
+    final lesson = _byId(_lessons(), assessment['class_subject_id'].toString());
     final existing = _rows('scores').where((s) => s['assessment_id'] == assessment['id'] && s['student_id'] == body['student_id']).toList();
+    final incoming = body['updated_at']?.toString() ?? '';
+    final now = incoming.isEmpty ? DateTime.now().toIso8601String() : incoming;
+    final source = body['source_id']?.toString() ?? demoSource;
+    if (existing.isNotEmpty) {
+      final current = existing.first['updated_at']?.toString() ?? '';
+      if (current.isNotEmpty && now.compareTo(current) < 0) {
+        _audit({'entity': 'score', 'student_id': student['id'], 'class_id': lesson['class_id'], 'roll_number': student['roll_no'], 'assessment_id': assessment['id'], 'action': 'kept', 'source_id': source, 'note': 'A newer mark was already saved'});
+        return Map<String, dynamic>.from(existing.first);
+      }
+    }
     final row = {
       'id': existing.isEmpty ? _id('sc') : existing.first['id'],
       'assessment_id': assessment['id'],
       'student_id': body['student_id'],
+      'class_id': lesson['class_id'],
+      'roll_number': student['roll_no'],
       'score': score,
+      'date': body['date']?.toString() ?? _today(),
       'revision': ((existing.isEmpty ? 0 : existing.first['revision'] as num?)?.toInt() ?? 0) + 1,
-      'updated_at': DateTime.now().toIso8601String(),
+      'updated_at': now,
+      'source_id': source,
     };
     final next = _rows('scores').where((s) => s['id'] != row['id']).toList()..add(row);
     state['scores'] = next;
+    _audit({'entity': 'score', 'student_id': student['id'], 'class_id': lesson['class_id'], 'roll_number': student['roll_no'], 'assessment_id': assessment['id'], 'date': row['date'], 'action': existing.isEmpty ? 'created' : 'updated', 'source_id': source});
     return row;
   }
 
@@ -1074,7 +1132,7 @@ class SchoolBook {
 
   Map<String, dynamic> _fresh() {
     state = {
-      'seed': 7,
+      'seed': 8,
       'seq': 0,
       'settings': {
         'academic_year': '2026',
@@ -1112,6 +1170,8 @@ class SchoolBook {
       'notices': <Map<String, dynamic>>[],
       'calendar': <Map<String, dynamic>>[],
       'attendance': <Map<String, dynamic>>[],
+      'audit': <Map<String, dynamic>>[],
+      'device_id': demoSource,
     };
     _seed();
     return state;
@@ -1126,38 +1186,58 @@ class SchoolBook {
       ];
     }
     final subjectRows = _subjects();
-    final first = ['Abel', 'Hanna', 'Dawit', 'Sara', 'Yonas', 'Liya', 'Nahom', 'Bethel', 'Kaleb', 'Helen', 'Ruth', 'Elias', 'Marta', 'Noah', 'Eden', 'Tigist', 'Biruk', 'Selam', 'Henok', 'Mahlet'];
-    final last = ['Tesfaye', 'Bekele', 'Hailu', 'Tadesse', 'Kebede', 'Alemu', 'Girma', 'Desta', 'Worku', 'Mengistu'];
+    const givenM = ['Abel', 'Yonas', 'Robel', 'Filmon', 'Natnael', 'Merhawi', 'Biniam', 'Henok', 'Nahom', 'Aman', 'Bereket', 'Daniel'];
+    const givenF = ['Selam', 'Luwam', 'Feven', 'Senait', 'Helen', 'Saba', 'Ruta', 'Winta', 'Soliana', 'Rahel', 'Natsanet', 'Semhar'];
+    const fathers = ['Tesfamariam', 'Ghebremedhin', 'Habte', 'Kidane', 'Tekle', 'Berhane', 'Woldu', 'Asmerom', 'Yohannes', 'Mehari', 'Andemariam', 'Ghirmay', 'Tewelde', 'Haile', 'Zerai', 'Gebreyesus', 'Kahsay', 'Negash', 'Abraha', 'Tekeste', 'Okbazghi', 'Kifle', 'Ogbe', 'Tesfalem', 'Weldemichael', 'Beyene', 'Araya', 'Ghebretinsae', 'Mengistu', 'Gebre'];
+    const mothers = ['Almaz', 'Berhana', 'Delina', 'Elsa', 'Fana', 'Genet', 'Haben', 'Lydia', 'Makda', 'Naomi', 'Rahwa', 'Zufan'];
     final classes = <Map<String, dynamic>>[];
     for (var grade = 1; grade <= 12; grade++) {
-      final sections = grade <= 8 ? ['A', 'B'] : ['A'];
-      for (final section in sections) {
-        classes.add({'grade': grade, 'section': section, 'name': 'Grade $grade$section'});
+      for (final section in ['1', '2']) {
+        classes.add({'grade': grade, 'section': section, 'name': '$grade-$section'});
       }
     }
     Map<String, dynamic> person(String name, String sex, String kind, String qual) {
-      final row = {'id': _id('st'), 'full_name': name, 'sex': sex, 'staff_type': kind, 'employee_id': 'E${(_staff().length + 1).toString().padLeft(3, '0')}', 'qualification': qual, 'phone': '0911${(100000 + _staff().length).toString().padLeft(6, '0')}', 'village': 'Addis Ababa'};
+      final row = {'id': _id('st'), 'full_name': name, 'sex': sex, 'staff_type': kind, 'employee_id': 'E${(_staff().length + 1).toString().padLeft(3, '0')}', 'qualification': qual, 'phone': '0911${(100000 + _staff().length).toString().padLeft(6, '0')}', 'village': 'Asmara'};
       _push('staff', row);
       return row;
     }
 
-    final samuel = person('Samuel Bekele', 'M', 'teaching', 'degree');
-    final meron = person('Meron Alemu', 'F', 'teaching', 'degree');
+    final tesfay = person('Tesfay Gebreyesus', 'M', 'teaching', 'degree');
+    final mehret = person('Mehret Kahsay', 'F', 'teaching', 'degree');
+    final kibrom = person('Kibrom Negash', 'M', 'teaching', 'degree');
+    final hiwet = person('Hiwet Abraha', 'F', 'teaching', 'degree');
+    final homerooms = [
+      person('Dawit Tekeste', 'M', 'teaching', 'degree'),
+      person('Senay Okbazghi', 'F', 'teaching', 'degree'),
+      person('Amanuel Kifle', 'M', 'teaching', 'diploma'),
+      person('Soliana Gebre', 'F', 'teaching', 'diploma'),
+      person('Yohannes Ogbe', 'M', 'teaching', 'degree'),
+      person('Rahel Weldemichael', 'F', 'teaching', 'diploma'),
+      person('Biniam Araya', 'M', 'teaching', 'degree'),
+      person('Natsanet Beyene', 'F', 'teaching', 'diploma'),
+      person('Filmon Ghebretinsae', 'M', 'teaching', 'degree'),
+      person('Senait Mengistu', 'F', 'teaching', 'diploma'),
+      person('Merhawi Haile', 'M', 'teaching', 'degree'),
+      person('Luwam Tewelde', 'F', 'teaching', 'diploma'),
+      person('Natnael Andemariam', 'M', 'teaching', 'degree'),
+      person('Feven Kidane', 'F', 'teaching', 'diploma'),
+      person('Robel Berhane', 'M', 'teaching', 'degree'),
+      person('Helen Yohannes', 'F', 'teaching', 'degree'),
+      person('Saba Mehari', 'F', 'teaching', 'diploma'),
+      person('Ghirmay Tesfalem', 'M', 'teaching', 'degree'),
+      person('Ruta Asmerom', 'F', 'teaching', 'diploma'),
+      person('Winta Zerai', 'F', 'teaching', 'diploma'),
+    ];
+    var room = 0;
     final yearly = {'id': _id('fee'), 'name': 'Yearly fee', 'amount': 4500.0};
     final stationery = {'id': _id('fee'), 'name': 'Stationery fee', 'amount': 800.0};
     final sportsFee = {'id': _id('fee'), 'name': 'Sports fee', 'amount': 500.0};
     state['fee_types'] = [yearly, stationery, sportsFee];
-    final extraScience = person('Sara Tesfaye', 'F', 'teaching', 'degree');
-    final extraSocial = person('Yonas Bekele', 'M', 'teaching', 'degree');
-    var teacherNo = 0;
     for (final cls in classes) {
       final grade = cls['grade'] as int;
       final level = grade <= 6 ? 'elementary' : (grade <= 8 ? 'junior' : 'high');
-      final isSamuel = cls['name'] == 'Grade 8A';
-      final teacher = isSamuel
-          ? samuel
-          : person('${first[teacherNo % first.length]} ${last[teacherNo % last.length]}', teacherNo.isEven ? 'F' : 'M', 'teaching', grade >= 9 ? 'degree' : 'diploma');
-      if (!isSamuel) teacherNo++;
+      final isHome = cls['name'] == '8-1';
+      final teacher = isHome ? tesfay : homerooms[room++ % homerooms.length];
       final classRow = {
         'id': _id('c'),
         'name': cls['name'],
@@ -1170,14 +1250,12 @@ class SchoolBook {
       _push('classes', classRow);
       for (final subject in subjectRows) {
         var who = teacher;
-        if (subject['name'] == 'Mathematics' && (cls['name'] == 'Grade 6A' || cls['name'] == 'Grade 7A' || cls['name'] == 'Grade 8A' || cls['name'] == 'Grade 8B')) {
-          who = _byName(_staff(), 'Samuel Bekele');
+        if (subject['name'] == 'Mathematics' && (cls['name'] == '6-1' || cls['name'] == '7-1' || cls['name'] == '8-1' || cls['name'] == '8-2')) {
+          who = tesfay;
         }
-        if (subject['name'] == 'English' && (grade >= 8 && cls['section'] == 'A' || cls['name'] == 'Grade 8A')) {
-          who = meron;
-        }
-        if (cls['name'] == 'Grade 8A' && subject['name'] == 'Science') who = extraScience;
-        if (cls['name'] == 'Grade 8A' && subject['name'] == 'Social studies') who = extraSocial;
+        if (subject['name'] == 'English' && grade >= 8 && cls['section'] == '1') who = mehret;
+        if (cls['name'] == '8-1' && subject['name'] == 'Science') who = kibrom;
+        if (cls['name'] == '8-1' && subject['name'] == 'Social studies') who = hiwet;
         final lesson = {
           'id': _id('ls'),
           'class_id': classRow['id'],
@@ -1194,29 +1272,79 @@ class SchoolBook {
         _ensureColumns(lesson['id'] as String);
       }
     }
-    person('Hanna Desta', 'F', 'non-teaching', 'diploma');
-    person('Kaleb Worku', 'M', 'non-teaching', 'certificate');
+    person('Awet Gebremichael', 'M', 'non-teaching', 'degree');
+    person('Solomon Tesfamariam', 'M', 'non-teaching', 'degree');
     const factors = [0.92, 0.80, 0.80, 0.68, 0.58, 0.52, 0.47, 0.42, 0.36, 0.30];
-    const fatherFirst = ['Abebe', 'Dawit', 'Yonas', 'Kaleb', 'Elias', 'Biruk', 'Henok', 'Nahom', 'Noah', 'Samuel', 'Girma', 'Tesfaye', 'Worku', 'Bekele', 'Hailu'];
     const subjectShift = {'Mathematics': 0.0, 'English': 0.05, 'Science': -0.04, 'Social studies': 0.02};
+    const grandfathers = ['Tesfay', 'Kibrom', 'Dawit', 'Yohannes', 'Petros', 'Michael', 'Efrem', 'Solomon', 'Awet', 'Habtom', 'Mussie', 'Semere', 'Medhanie', 'Aron', 'Fitsum'];
+    const featured = <String, List<List<String>>>{
+      '1-1': [
+        ['Amanuel', 'Araya', 'M'],
+        ['Biniam', 'Haile', 'M'],
+        ['Delina', 'Kifle', 'F'],
+        ['Elsa', 'Ogbe', 'F'],
+        ['Genet', 'Weldemichael', 'F'],
+        ['Henok', 'Beyene', 'M'],
+        ['Makda', 'Gebre', 'F'],
+        ['Mussie', 'Ghebretinsae', 'M'],
+        ['Rahwa', 'Mengistu', 'F'],
+        ['Semere', 'Tesfalem', 'M'],
+      ],
+      '8-1': [
+        ['Abel', 'Tesfamariam', 'M'],
+        ['Selam', 'Ghebremedhin', 'F'],
+        ['Yonas', 'Habte', 'M'],
+        ['Luwam', 'Kidane', 'F'],
+        ['Feven', 'Tekle', 'F'],
+        ['Robel', 'Berhane', 'M'],
+        ['Senait', 'Woldu', 'F'],
+        ['Filmon', 'Asmerom', 'M'],
+        ['Helen', 'Yohannes', 'F'],
+        ['Natnael', 'Mehari', 'M'],
+      ],
+    };
+    final used = <String>{
+      for (final group in featured.values)
+        for (final row in group) '${row[0]} ${row[1]}',
+    };
     final classList = _classes();
     var pupilNo = 0;
+    var salt = 0;
     for (final cls in classList) {
       for (var n = 0; n < 10; n++) {
-        final name = '${first[pupilNo % first.length]} ${last[(pupilNo ~/ first.length) % last.length]}';
-        final unique = pupilNo < first.length * last.length ? name : '$name $pupilNo';
+        var given = '';
+        var father = '';
+        var sex = 'F';
+        final special = featured[cls['name']];
+        if (special != null) {
+          given = special[n][0];
+          father = special[n][1];
+          sex = special[n][2];
+        } else {
+          while (true) {
+            final male = salt.isEven;
+            final pool = male ? givenM : givenF;
+            final n = salt ~/ 2;
+            given = pool[n % pool.length];
+            father = fathers[(n ~/ pool.length) % fathers.length];
+            sex = male ? 'M' : 'F';
+            salt++;
+            if (used.add('$given $father')) break;
+          }
+        }
         final student = {
           'id': _id('p'),
-          'full_name': unique,
-          'sex': pupilNo % 3 == 0 ? 'M' : 'F',
-          'mother_name': '${first[(pupilNo + 3) % first.length]} ${last[pupilNo % last.length]}',
+          'full_name': '$given $father',
+          'sex': sex,
+          'mother_name': '${mothers[pupilNo % mothers.length]} ${fathers[(pupilNo + 5) % fathers.length]}',
           'class_id': cls['id'],
-          'dropped_out': cls['name'] == 'Grade 12A' && n == 9,
-          'dropout_reason': cls['name'] == 'Grade 12A' && n == 9 ? 'Moved away' : '',
-          'dropout_date': cls['name'] == 'Grade 12A' && n == 9 ? '2026-10-02' : '',
-          'father_name': '${fatherFirst[pupilNo % fatherFirst.length]} ${last[(pupilNo + 2) % last.length]}',
+          'roll_no': 0,
+          'dropped_out': cls['name'] == '12-1' && n == 9,
+          'dropout_reason': cls['name'] == '12-1' && n == 9 ? 'Moved away' : '',
+          'dropout_date': cls['name'] == '12-1' && n == 9 ? '2026-10-02' : '',
+          'father_name': '$father ${grandfathers[pupilNo % grandfathers.length]}',
           'phone': '09${(11000000 + pupilNo).toString()}',
-          'address': 'Hope neighbourhood',
+          'address': 'Asmara',
           'remark': n == 0 ? 'A steady worker. Keep it up.' : '',
         };
         _push('students', student);
@@ -1227,7 +1355,18 @@ class SchoolBook {
           for (final assessment in (state['assessments'] as List).where((a) => (a as Map)['class_subject_id'] == lesson['id'])) {
             final max = ((assessment as Map)['max_marks'] as num).toDouble();
             final score = round2(max * level);
-            _push('scores', {'id': _id('sc'), 'assessment_id': assessment['id'], 'student_id': student['id'], 'score': score > max ? max : score, 'revision': 1, 'updated_at': ''});
+            _push('scores', {
+              'id': _id('sc'),
+              'assessment_id': assessment['id'],
+              'student_id': student['id'],
+              'class_id': cls['id'],
+              'roll_number': 0,
+              'score': score > max ? max : score,
+              'date': '2026-11-01',
+              'revision': 1,
+              'updated_at': '2026-11-01T08:00:00',
+              'source_id': demoSource,
+            });
           }
         }
         void payType(Map<String, dynamic> type, num amount) {
@@ -1241,13 +1380,23 @@ class SchoolBook {
         } else if (n % 3 == 1) {
           payType(yearly, 1500);
         }
-        if (cls['name'] == 'Grade 8A') {
+        if (cls['name'] == '8-1') {
           for (final day in ['2026-11-02', '2026-11-03', '2026-11-04', '2026-11-05']) {
-            _push('attendance', {'id': _id('at'), 'student_id': student['id'], 'class_id': cls['id'], 'date': day, 'present': n == 4 && day == '2026-11-03' ? false : true});
+            _push('attendance', {
+              'id': _id('at'),
+              'student_id': student['id'],
+              'class_id': cls['id'],
+              'roll_number': 0,
+              'date': day,
+              'present': n == 4 && day == '2026-11-03' ? false : true,
+              'updated_at': '${day}T08:00:00',
+              'source_id': demoSource,
+            });
           }
         }
         pupilNo++;
       }
+      _numberClass(cls['id'].toString());
     }
     state['incomes'] = [
       {'id': _id('m'), 'amount': 12000, 'source': 'Registration', 'received_on': '2026-09-01', 'note': ''},
@@ -1265,11 +1414,11 @@ class SchoolBook {
       {'id': _id('mt'), 'meeting_date': '2026-09-15', 'title': 'Opening meeting', 'attendees': 'All teachers', 'notes': 'Term dates and fees'},
     ];
     state['users'] = [
-      {'id': _id('u'), 'username': 'admin', 'role': 'admin', 'display_name': 'School admin', 'staff_id': '', 'active': true},
-      {'id': _id('u'), 'username': 'director', 'role': 'director', 'display_name': 'Director', 'staff_id': '', 'active': true},
+      {'id': _id('u'), 'username': 'admin', 'role': 'admin', 'display_name': 'Awet Gebremichael', 'staff_id': '', 'active': true},
+      {'id': _id('u'), 'username': 'director', 'role': 'director', 'display_name': 'Solomon Tesfamariam', 'staff_id': '', 'active': true},
     ];
     state['absences'] = [
-      {'id': _id('ab'), 'staff_id': _byName(_staff(), 'Samuel Bekele')['id'], 'date': '2026-11-02', 'note': ''},
+      {'id': _id('ab'), 'staff_id': _byName(_staff(), 'Tesfay Gebreyesus')['id'], 'date': '2026-11-02', 'note': ''},
     ];
     final placed = placeWeek(days: 5, periodsPerDay: 6, lessons: _lessons());
     state['slots'] = [for (final row in placed) {'id': _id('sl'), ...row}];
@@ -1345,6 +1494,11 @@ class SchoolBook {
         'level': cls['level'],
       });
     }
+    final totalsByStudent = <String, int>{
+      for (final entry in marksByStudent.entries)
+        entry.key: entry.value.values.fold<int>(0, (sum, mark) => sum + ((mark['total'] as num?)?.round() ?? 0)),
+    };
+    int totalsFor(String id) => totalsByStudent[id] ?? 0;
     final places = standings(standingInput, Map<String, dynamic>.from((state['settings'] as Map)['fail_limits'] as Map));
     final rows = <Map<String, dynamic>>[];
     for (final place in places) {
@@ -1353,10 +1507,13 @@ class SchoolBook {
         'id': student['id'],
         'name': student['full_name'],
         'sex': student['sex'],
+        'roll': student['roll_no'],
         'dropped': student['dropped_out'] == true,
         'marks': marksByStudent[place.id] ?? {},
-        'average': place.average.round(),
+        'total': totalsFor(place.id),
+        'average': place.average,
         'rank': place.status == 'dropout' ? '' : place.rank,
+        'result': place.status == 'promoted' ? 'Pass' : place.status == 'failed' ? 'Fail' : place.status == 'dropout' ? 'Left' : '—',
       });
     }
     rows.sort((a, b) {
@@ -1400,6 +1557,7 @@ class SchoolBook {
     return {
       'student': student,
       'class_name': cls['name'],
+      'roll_no': student['roll_no'],
       'homeroom': cls['homeroom_name'],
       'marks': marks,
       'fees': fees,
@@ -1537,7 +1695,8 @@ class SchoolBook {
     if (!_seesSchool() && !_homes().contains(id) && who['staff_id']?.toString() != _byId(_classes(), id)['homeroom_staff_id'].toString()) {
       throw ApiException('Only the homeroom teacher can take attendance');
     }
-    final pupils = _pupils().where((s) => s['class_id'] == id && s['dropped_out'] != true).toList();
+    final pupils = _pupils().where((s) => s['class_id'] == id && s['dropped_out'] != true).toList()
+      ..sort((a, b) => ((a['roll_no'] as num?) ?? 0).compareTo((b['roll_no'] as num?) ?? 0));
     final marks = (state['attendance'] as List).where((a) => (a as Map)['class_id'] == id && a['date'] == day).map((e) => Map<String, dynamic>.from(e as Map)).toList();
     var present = 0;
     for (final mark in marks) {
@@ -1553,22 +1712,100 @@ class SchoolBook {
     return {'class_id': id, 'date': day, 'students': pupils, 'marks': marks, 'present': present, 'percent': percent};
   }
 
+  bool _canTakeAttendance(String classId) => _isAdmin() || _homes().contains(classId);
+
+  void _numberClass(String classId) {
+    final pupils = (state['students'] as List).where((s) => (s as Map)['class_id'].toString() == classId).map((e) => e as Map).toList();
+    pupils.sort((a, b) => a['full_name'].toString().toLowerCase().compareTo(b['full_name'].toString().toLowerCase()));
+    for (var i = 0; i < pupils.length; i++) {
+      final roll = i + 1;
+      pupils[i]['roll_no'] = roll;
+      final id = pupils[i]['id'];
+      for (final row in (state['scores'] as List)) {
+        if ((row as Map)['student_id'] == id) row['roll_number'] = roll;
+      }
+      for (final row in (state['attendance'] as List)) {
+        if ((row as Map)['student_id'] == id) row['roll_number'] = roll;
+      }
+    }
+  }
+
+  Map<String, dynamic> _renumber(String classId) {
+    _byId(_classes(), classId);
+    if (!_canTakeAttendance(classId)) throw ApiException('Only the homeroom teacher can renumber this class');
+    _numberClass(classId);
+    _audit({'entity': 'roll', 'class_id': classId, 'action': 'renumber', 'source_id': demoSource, 'note': 'Roll numbers set from A to Z'});
+    return {'ok': true, 'class_id': classId};
+  }
+
+  Map<String, dynamic> _markAbsentNumbers(Map<String, dynamic> body) {
+    final classId = body['class_id']?.toString() ?? '';
+    if (!_canTakeAttendance(classId)) throw ApiException('Only the homeroom teacher can take attendance');
+    final date = body['date']?.toString() ?? _today();
+    final numbers = parseRollNumbers(body['text']?.toString() ?? '');
+    final byRoll = <int, Map<String, dynamic>>{
+      for (final student in _pupils().where((s) => s['class_id'].toString() == classId && s['dropped_out'] != true))
+        (student['roll_no'] as num?)?.toInt() ?? 0: student,
+    };
+    final matched = <Map<String, dynamic>>[];
+    final unknown = <int>[];
+    for (final number in numbers) {
+      final student = byRoll[number];
+      if (student == null) {
+        unknown.add(number);
+        continue;
+      }
+      _markAttendance({'class_id': classId, 'student_id': student['id'], 'date': date, 'present': false, 'source_id': body['source_id'], 'updated_at': body['updated_at']});
+      matched.add({'roll_no': number, 'student_id': student['id'], 'full_name': student['full_name']});
+    }
+    return {'class_id': classId, 'date': date, 'matched': matched, 'unknown': unknown, 'saved': matched.length};
+  }
+
   Map<String, dynamic> _markAttendance(Map<String, dynamic> body) {
     final classId = body['class_id']?.toString() ?? '';
-    if (!_homes().contains(classId)) throw ApiException('Only the homeroom teacher can take attendance');
+    if (!_canTakeAttendance(classId)) throw ApiException('Only the homeroom teacher can take attendance');
     final date = body['date']?.toString() ?? _today();
     final studentId = body['student_id'].toString();
+    final student = _byId(_pupils(), studentId);
     final present = body['present'] == true;
+    final incoming = body['updated_at']?.toString() ?? '';
+    final now = incoming.isEmpty ? DateTime.now().toIso8601String() : incoming;
+    final source = body['source_id']?.toString() ?? demoSource;
     final rows = (state['attendance'] as List).cast<Map>();
     for (final row in rows) {
-      if (row['student_id'] == studentId && row['date'] == date) {
+      if (row['student_id'] == studentId && row['date'] == date && row['class_id'] == classId) {
+        final current = row['updated_at']?.toString() ?? '';
+        if (current.isNotEmpty && now.compareTo(current) < 0) {
+          _audit({'entity': 'attendance', 'student_id': studentId, 'class_id': classId, 'roll_number': student['roll_no'], 'date': date, 'action': 'kept', 'source_id': source, 'note': 'A newer attendance mark was already saved'});
+          return Map<String, dynamic>.from(row);
+        }
         row['present'] = present;
+        row['roll_number'] = student['roll_no'];
+        row['updated_at'] = now;
+        row['source_id'] = source;
+        _audit({'entity': 'attendance', 'student_id': studentId, 'class_id': classId, 'roll_number': student['roll_no'], 'date': date, 'action': 'updated', 'source_id': source});
         return Map<String, dynamic>.from(row);
       }
     }
-    final row = {'id': _id('at'), 'student_id': studentId, 'class_id': classId, 'date': date, 'present': present};
+    final row = {
+      'id': _id('at'),
+      'student_id': studentId,
+      'class_id': classId,
+      'roll_number': student['roll_no'],
+      'date': date,
+      'present': present,
+      'updated_at': now,
+      'source_id': source,
+    };
     _push('attendance', row);
+    _audit({'entity': 'attendance', 'student_id': studentId, 'class_id': classId, 'roll_number': student['roll_no'], 'date': date, 'action': 'created', 'source_id': source});
     return row;
+  }
+
+  void _audit(Map<String, dynamic> entry) {
+    final list = (state['audit'] as List?) ?? <Map<String, dynamic>>[];
+    list.add({'id': _id('au'), 'at': DateTime.now().toIso8601String(), ...entry});
+    state['audit'] = list;
   }
 
   Map<String, dynamic> _saveProfile(String id, Map<String, dynamic> body) {

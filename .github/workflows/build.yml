@@ -295,7 +295,7 @@ jobs:
         working-directory: app
         env:
           SCHOOLDESK_SHOTS: ${{ github.workspace }}/dist/demo-shots
-        run: flutter test test/demo_walk_test.dart test/mac_window_test.dart --dart-define=SCHOOLDESK_DEMO=true
+        run: flutter test test/demo_walk_test.dart test/mac_window_test.dart test/marks_table_test.dart --dart-define=SCHOOLDESK_DEMO=true
       - name: Build demo Mac app
         working-directory: app
         run: flutter build macos --release --dart-define=SCHOOLDESK_DEMO=true
@@ -373,7 +373,10 @@ jobs:
             dist/classes.png
             dist/class-detail.png
             dist/class-marks.png
+            dist/class-marks-sorted.png
             dist/class-fees.png
+            dist/attendance-by-number.png
+            dist/marks-entry-by-number.png
             dist/student-search.png
             dist/student-profile.png
             dist/results.png

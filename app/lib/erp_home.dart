@@ -8,6 +8,7 @@ import 'erp_shell.dart';
 import 'money.dart';
 import 'office.dart';
 import 'screens.dart';
+import 'roll_entry.dart';
 import 'school_book.dart';
 import 'shell.dart';
 import 'startup_log.dart';
@@ -129,27 +130,35 @@ class _ErpDashboardState extends State<ErpDashboard> {
       'timetable': 'Timetable',
       'reports': 'Reports',
     };
-    if (page == 'class' || page == 'class-marks' || page == 'class-fees') {
-      final focus = page == 'class-marks' ? 'marks' : page == 'class-fees' ? 'fees' : 'overview';
+    if (page == 'class' || page == 'class-marks' || page == 'class-marks-sorted' || page == 'class-fees') {
+      final focus = page == 'class-marks' || page == 'class-marks-sorted' ? 'marks' : page == 'class-fees' ? 'fees' : 'overview';
       final classes = asMaps(SchoolBook.instance.callNow('GET', '/api/v1/classes', null));
-      final match = classes.where((c) => c['name'] == 'Grade 8A').toList();
+      final match = classes.where((c) => c['name'] == '8-1').toList();
       if (match.isEmpty) return;
       DeskTrail.push(
         context,
-        ClassDetailScreen(id: match.first['id'].toString(), name: 'Grade 8A', focus: focus),
+        ClassDetailScreen(id: match.first['id'].toString(), name: '8-1', focus: focus),
         nav: 'Classes',
-        crumbs: ['Classes', 'Grade 8A'],
+        crumbs: ['Classes', '8-1'],
       );
       return;
     }
+    if (page == 'attendance-by-number') {
+      DeskTrail.push(context, const AttendanceScreen(smokeClassName: '1-1', smokeNumbers: '2, 5'), nav: 'Attendance', crumbs: ['Attendance', '1-1']);
+      return;
+    }
+    if (page == 'marks-entry-by-number') {
+      DeskTrail.push(context, const RollMarkScreen(smokeClassName: '1-1'), nav: 'Marks & Results', crumbs: ['Marks & Results', '1-1']);
+      return;
+    }
     if (page == 'find' || page == 'profile') {
-      final hits = asMaps(SchoolBook.instance.callNow('GET', '/api/v1/search?q=Abel%20Tesfaye', null));
-      final students = hits.where((h) => h['kind'] == 'student' && h['name'] == 'Abel Tesfaye').toList();
+      final hits = asMaps(SchoolBook.instance.callNow('GET', '/api/v1/search?q=Abel%20Tesfamariam', null));
+      final students = hits.where((h) => h['kind'] == 'student' && h['name'] == 'Abel Tesfamariam').toList();
       if (students.isEmpty) return;
       if (page == 'profile') {
-        DeskTrail.push(context, ProfileScreen(id: students.first['id'].toString()), nav: 'Students', crumbs: ['Students', 'Abel Tesfaye']);
+        DeskTrail.push(context, ProfileScreen(id: students.first['id'].toString()), nav: 'Students', crumbs: ['Students', 'Abel Tesfamariam']);
       } else {
-        DeskTrail.push(context, SearchScreen(query: 'Abel Tesfaye'), nav: 'Students', crumbs: ['Students', 'Abel Tesfaye']);
+        DeskTrail.push(context, SearchScreen(query: 'Abel Tesfamariam'), nav: 'Students', crumbs: ['Students', 'Abel Tesfamariam']);
       }
       return;
     }
@@ -276,7 +285,7 @@ class _ErpDashboardState extends State<ErpDashboard> {
         Padding(
           padding: const EdgeInsets.only(bottom: 8),
           child: Row(children: [
-            SizedBox(width: 64, child: Text('Grade ${grade['grade']}', style: const TextStyle(fontSize: 14))),
+            SizedBox(width: 36, child: Text('${grade['grade']}', style: const TextStyle(fontSize: 14))),
             Expanded(
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(4),
@@ -306,7 +315,7 @@ class _ErpDashboardState extends State<ErpDashboard> {
         Padding(
           padding: const EdgeInsets.only(bottom: 8),
           child: Row(children: [
-            SizedBox(width: 64, child: Text('Grade ${grade['grade']}', style: const TextStyle(fontSize: 14))),
+            SizedBox(width: 36, child: Text('${grade['grade']}', style: const TextStyle(fontSize: 14))),
             Expanded(
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(4),

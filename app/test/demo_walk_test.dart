@@ -20,8 +20,8 @@ void main() {
     await until(tester, t('Grade 8'));
     await shot(tester, 'fees');
     await tap(tester, 'Grade 8');
-    await until(tester, t('Grade 8A'));
-    await tap(tester, 'Grade 8A');
+    await until(tester, t('8-1'));
+    await tap(tester, '8-1');
     await until(tester, find.textContaining('Paid'));
     await back(tester);
     await tap(tester, 'Marks & Results');
@@ -29,13 +29,13 @@ void main() {
     await tap(tester, 'Make statistics PDFs');
     await until(tester, find.textContaining('Statistics saved'));
     await tap(tester, 'Grade 8');
-    await until(tester, t('Grade 8A'));
-    await tap(tester, 'Grade 8A');
+    await until(tester, t('8-1'));
+    await tap(tester, '8-1');
     await until(tester, find.textContaining('Rank'));
     await shot(tester, 'results');
     await back(tester);
     await tap(tester, 'Attendance');
-    await until(tester, t('Samuel Bekele'));
+    await until(tester, t('Tesfay Gebreyesus'));
     await shot(tester, 'absence');
     await back(tester);
     await tap(tester, 'Timetable');
@@ -77,15 +77,19 @@ void main() {
     await back(tester);
     await tap(tester, 'Defaulters');
     await until(tester, find.textContaining('Left'));
-    await tester.tap(find.textContaining('Left').at(0), warnIfMissed: false);
-    await tester.pump();
+    final taps = [for (final element in find.byType(ListTile).evaluate()) (element.widget as ListTile).onTap];
+    for (final open in taps) {
+      open?.call();
+      await tester.pump();
+      if (find.text('Receipt saved').evaluate().isNotEmpty) break;
+    }
     await until(tester, t('Receipt saved'));
     await back(tester);
     await tap(tester, 'Subjects');
     await until(tester, find.textContaining('Mathematics'));
     await back(tester);
     await tap(tester, 'Promote');
-    await until(tester, t('Grade 1A'));
+    await until(tester, t('1-1'));
     tester.widget<FilledButton>(find.widgetWithText(FilledButton, 'Promote').first).onPressed?.call();
     await tester.pump();
     await until(tester, find.textContaining('Moved'));

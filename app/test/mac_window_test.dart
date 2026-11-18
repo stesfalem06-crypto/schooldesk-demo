@@ -70,11 +70,11 @@ List<String> classChips(WidgetTester tester) {
 
 List<String> orderedClasses(List<String> names) {
   int rank(String name) {
-    final match = RegExp(r'(\d+)\s*([A-Za-z])?').firstMatch(name);
-    if (match == null) return 100000;
-    final number = int.parse(match.group(1)!);
-    final letter = match.group(2)?.toUpperCase() ?? '';
-    return number * 100 + (letter.isEmpty ? 0 : letter.codeUnitAt(0));
+    final hyphen = RegExp(r'(\d+)\s*-\s*(\d+)').firstMatch(name);
+    if (hyphen != null) return int.parse(hyphen.group(1)!) * 100 + int.parse(hyphen.group(2)!);
+    final number = RegExp(r'(\d+)').firstMatch(name);
+    if (number == null) return 100000;
+    return int.parse(number.group(1)!) * 100;
   }
   return [...names]..sort((a, b) => rank(a).compareTo(rank(b)));
 }

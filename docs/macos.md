@@ -23,7 +23,7 @@ The server is locked until an unlock code is entered. The lock screen shows a sh
 
 `SchoolDesk-Demo.dmg` is a separate build. It does not contain a server, it does not use the network, and it does not ask for an unlock code or a password. The production disk image is unchanged and still asks for an unlock code.
 
-The demo opens on Choose who you are. Tap School admin, Director, Homeroom teacher (Samuel, Grade 8A), or Subject teacher (Meron, English). Switch role is in the header. Reset sample data puts the sample school back. Records stay in `Library/Application Support/SchoolDesk Demo`. Reports are written to `Documents/SchoolDesk`.
+The demo opens on Choose who you are. Tap School admin, Director, Homeroom teacher (Tesfay, 8-1), or Subject teacher (Mehret, English). Classes are named by grade and section, such as 1-1 and 8-1. Switch role is in the header. Reset sample data puts the sample school back. Records stay in `Library/Application Support/SchoolDesk Demo`. Reports are written to `Documents/SchoolDesk`.
 
 A download from Drive or the browser is marked with quarantine. On macOS 26, Gatekeeper then refuses an ad-hoc signed app, so a double-click can look like the app is not opening. Use one of these:
 

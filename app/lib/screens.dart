@@ -7,6 +7,8 @@ import 'app_state.dart';
 import 'edition.dart';
 import 'grades.dart';
 import 'marks_grid.dart';
+import 'marks_table.dart';
+import 'roll_entry.dart';
 import 'money.dart';
 import 'timetable_page.dart';
 import 'office.dart';
@@ -348,6 +350,8 @@ class _MarksScreenState extends State<MarksScreen> {
                       children: [
                         const Text('Choose a subject. A red total means the exam is low.', style: TextStyle(fontSize: 16)),
                         const SizedBox(height: 8),
+                        FilledButton(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const RollMarkScreen())), child: const Text('Enter by roll number')),
+                        const SizedBox(height: 8),
                         for (final s in subjects)
                           Card(
                             child: ListTile(
@@ -601,7 +605,21 @@ class _ResultsScreenState extends State<ResultsScreen> {
     if (schoolWide && picked == null) {
       return GradeSummary(title: 'Results', kind: 'results', onOpenClass: (cls) => open(cls));
     }
-    final students = asMaps(picked?['students']);
+    if (picked != null) {
+      final table = _resultRows(asMaps(picked?['students']));
+      return SchoolScaffold(
+        title: 'Results',
+        school: context.watch<AppModel>().school,
+        body: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            TextButton(onPressed: () => setState(() => picked = null), child: const Text('All classes')),
+            const SizedBox(height: 8),
+            Expanded(child: MarksTable(subjects: table.subjects, rows: table.rows)),
+          ]),
+        ),
+      );
+    }
     return SchoolScaffold(
       title: 'Results',
       school: context.watch<AppModel>().school,
@@ -612,31 +630,45 @@ class _ResultsScreenState extends State<ResultsScreen> {
               : ListView(
                   padding: const EdgeInsets.all(16),
                   children: [
-                    if (picked != null) TextButton(onPressed: () => setState(() => picked = null), child: const Text('All classes')),
-                    if (picked == null)
-                      for (final c in classes)
-                        Card(child: ListTile(title: Text(c['name'].toString(), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800)), onTap: () => open(c))),
-                    if (picked != null)
-                      for (final s in students)
-                        _resultCard(s),
+                    for (final c in classes)
+                      Card(child: ListTile(title: Text(c['name'].toString(), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800)), onTap: () => open(c))),
                   ],
                 ),
     );
   }
 
-  Widget _resultCard(Map<String, dynamic> row) {
-    final student = (row['student'] as Map?)?.map((k, v) => MapEntry(k.toString(), v)) ?? {};
-    final standing = (row['standing'] as Map?)?.map((k, v) => MapEntry(k.toString(), v)) ?? {};
-    final status = standing['status']?.toString() ?? '';
-    final color = status == 'promoted' ? passGreen : status == 'failed' ? failRed : ink;
-    final label = status == 'promoted' ? 'Promoted' : status == 'failed' ? 'Failed' : status == 'dropout' ? 'Left' : 'Not ready';
-    return Card(
-      child: ListTile(
-        title: Text(student['full_name']?.toString() ?? '', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
-        subtitle: Text('Average ${standing['average'] ?? '—'}   Rank ${standing['rank'] ?? '—'}', style: const TextStyle(fontSize: 16)),
-        trailing: Text(label, style: TextStyle(color: color, fontWeight: FontWeight.w800, fontSize: 16)),
-      ),
-    );
+  ({List<String> subjects, List<Map<String, dynamic>> rows}) _resultRows(List<Map<String, dynamic>> students) {
+    final subjects = <String>[];
+    final rows = <Map<String, dynamic>>[];
+    for (final row in students) {
+      final student = (row['student'] as Map?)?.map((k, v) => MapEntry(k.toString(), v)) ?? {};
+      final standing = (row['standing'] as Map?)?.map((k, v) => MapEntry(k.toString(), v)) ?? {};
+      final marks = <String, Map<String, dynamic>>{};
+      var total = 0;
+      for (final item in asMaps(row['subjects'])) {
+        final lesson = (item['class_subject'] as Map?)?.map((k, v) => MapEntry(k.toString(), v)) ?? {};
+        final result = (item['result'] as Map?)?.map((k, v) => MapEntry(k.toString(), v)) ?? {};
+        final name = lesson['subject_name']?.toString() ?? '';
+        if (name.isEmpty) continue;
+        if (!subjects.contains(name)) subjects.add(name);
+        final score = (result['total'] as num?)?.round() ?? 0;
+        marks[name] = {'total': score};
+        total += score;
+      }
+      final status = standing['status']?.toString() ?? '';
+      rows.add({
+        'name': student['full_name'] ?? '',
+        'sex': student['sex'] ?? '',
+        'roll': student['roll_no'],
+        'dropped': student['dropped_out'] == true,
+        'marks': marks,
+        'total': total,
+        'average': standing['average'],
+        'rank': standing['status'] == 'dropout' ? '' : standing['rank'],
+        'result': status == 'promoted' ? 'Pass' : status == 'failed' ? 'Fail' : status == 'dropout' ? 'Left' : '—',
+      });
+    }
+    return (subjects: subjects, rows: rows);
   }
 }
 
@@ -650,8 +682,19 @@ class _StudentsScreenState extends State<StudentsScreen> {
   String? classId;
   List<Map<String, dynamic>> classes = [];
   List<Map<String, dynamic>> students = [];
+  Map<String, Map<String, dynamic>> marksById = {};
+  List<String> subjects = [];
   Map<String, dynamic>? summary;
   bool loading = true;
+  final filter = TextEditingController();
+  String sortKey = 'Name';
+  bool descending = false;
+
+  @override
+  void dispose() {
+    filter.dispose();
+    super.dispose();
+  }
 
   @override
   void initState() { super.initState(); boot(); }
@@ -667,14 +710,65 @@ class _StudentsScreenState extends State<StudentsScreen> {
     if (classId == null) { setState(() => loading = false); return; }
     final model = context.read<AppModel>();
     students = asMaps(await model.ask((api) => api.get('/api/v1/students?class_id=$classId')));
+    try {
+      final results = await model.ask((api) => api.get('/api/v1/classes/$classId/results'));
+      final packed = _pack(asMaps((results as Map)['students']));
+      subjects = packed.subjects;
+      marksById = packed.byId;
+    } catch (_) {}
     final sum = await model.ask((api) => api.get('/api/v1/classes/$classId/summary'));
     summary = (sum as Map).map((k, v) => MapEntry(k.toString(), v));
     if (context.mounted) setState(() => loading = false);
   }
 
+  ({List<String> subjects, Map<String, Map<String, dynamic>> byId}) _pack(List<Map<String, dynamic>> rows) {
+    final names = <String>[];
+    final byId = <String, Map<String, dynamic>>{};
+    for (final row in rows) {
+      final student = (row['student'] as Map?) ?? {};
+      final standing = (row['standing'] as Map?) ?? {};
+      final marks = <String, Map<String, dynamic>>{};
+      for (final item in asMaps(row['subjects'])) {
+        final lesson = (item['class_subject'] as Map?) ?? {};
+        final result = (item['result'] as Map?) ?? {};
+        final name = lesson['subject_name']?.toString() ?? '';
+        if (name.isEmpty) continue;
+        if (!names.contains(name)) names.add(name);
+        marks[name] = {'total': (result['total'] as num?)?.round() ?? 0};
+      }
+      byId[student['id'].toString()] = {'average': standing['average'], 'marks': marks, 'rank': standing['rank']};
+    }
+    return (subjects: names, byId: byId);
+  }
+
+  Future<void> renumber() async {
+    if (classId == null) return;
+    final ok = await confirm(context, 'Renumber alphabetically?', 'Students get numbers 1, 2, 3 from A to Z. Someone who has left keeps a number.');
+    if (!ok || !mounted) return;
+    try {
+      await context.read<AppModel>().ask((api) => api.post('/api/v1/classes/$classId/renumber', {}));
+      if (mounted) saved(context, 'Roll numbers updated');
+      await load();
+    } on ApiException catch (e) {
+      if (mounted) toast(context, e.message);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final head = (summary?['head'] as Map?) ?? {};
+    final rows = <Map<String, dynamic>>[
+      for (final student in students)
+        {
+          'name': student['full_name'],
+          'sex': student['sex'],
+          'roll': student['roll_no'],
+          'average': marksById[student['id'].toString()]?['average'],
+          'marks': marksById[student['id'].toString()]?['marks'] ?? <String, dynamic>{},
+          'student': student,
+        },
+    ];
+    final shown = orderRows(rows, sortKey: sortKey, descending: descending, query: filter.text);
     return SchoolScaffold(
       title: 'My class',
       school: context.watch<AppModel>().school,
@@ -686,21 +780,38 @@ class _StudentsScreenState extends State<StudentsScreen> {
                 Text('Students ${head['students'] ?? 0}   Boys ${head['male'] ?? 0}   Girls ${head['female'] ?? 0}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
                 Text('Left ${head['dropped'] ?? 0}', style: const TextStyle(fontSize: 16, color: failRed)),
                 const SizedBox(height: 8),
+                NameSortBar(
+                  filter: filter,
+                  sortKey: sortKey,
+                  choices: ['Name', 'Average', ...subjects],
+                  descending: descending,
+                  onFilter: (_) => setState(() {}),
+                  onSort: (value) => setState(() => sortKey = value),
+                  onDirection: (down) => setState(() => descending = down),
+                  status: 'Showing ${shown.length} of ${students.length}',
+                ),
+                const SizedBox(height: 8),
                 FilledButton(onPressed: addStudent, child: const Text('Add a student')),
                 const SizedBox(height: 8),
-                for (final s in students)
-                  Card(
-                    child: ListTile(
-                      leading: Icon(s['sex'] == 'F' ? Icons.girl : Icons.boy, size: 32, color: s['dropped_out'] == true ? failRed : leaf),
-                      title: Text(s['full_name'].toString(), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
-                      subtitle: Text(s['dropped_out'] == true ? 'Left · ${s['dropout_reason'] ?? ''}' : 'Mother: ${s['mother_name'] ?? ''}'),
-                      trailing: s['dropped_out'] == true
-                          ? TextButton(onPressed: () => drop(s, false), child: const Text('Undo'))
-                          : TextButton(onPressed: () => drop(s, true), child: const Text('Left school', style: TextStyle(color: failRed))),
-                    ),
-                  ),
+                OutlinedButton(onPressed: renumber, child: const Text('Renumber alphabetically')),
+                const SizedBox(height: 8),
+                for (final row in shown)
+                  _studentTile(row['student'] as Map<String, dynamic>),
               ],
             ),
+    );
+  }
+
+  Widget _studentTile(Map<String, dynamic> s) {
+    return Card(
+      child: ListTile(
+        leading: Text('${s['roll_no'] ?? ''}', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: navy)),
+        title: Text(s['full_name'].toString(), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+        subtitle: Text(s['dropped_out'] == true ? 'Left · ${s['dropout_reason'] ?? ''}' : 'Mother: ${s['mother_name'] ?? ''}'),
+        trailing: s['dropped_out'] == true
+            ? TextButton(onPressed: () => drop(s, false), child: const Text('Undo'))
+            : TextButton(onPressed: () => drop(s, true), child: const Text('Left school', style: TextStyle(color: failRed))),
+      ),
     );
   }
 
