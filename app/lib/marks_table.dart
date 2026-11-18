@@ -149,14 +149,14 @@ class _MarksTableState extends State<MarksTable> {
   Widget build(BuildContext context) {
     final shown = orderRows(widget.rows, sortKey: sortKey, descending: descending, query: filter.text);
     final columns = [
-      const GridCol('No.', 48, TextAlign.center, sortKey: 'No.'),
-      const GridCol('Student', 220, TextAlign.left, sortKey: 'Name'),
-      const GridCol('Sex', 48, TextAlign.center, sortKey: 'Sex'),
-      for (final subject in widget.subjects) GridCol(subject, 96, TextAlign.right, sortKey: subject),
-      const GridCol('Total', 80, TextAlign.right, sortKey: 'Total'),
-      const GridCol('Average', 80, TextAlign.right, sortKey: 'Average'),
-      const GridCol('Rank', 64, TextAlign.center, sortKey: 'Rank'),
-      const GridCol('Result', 80, TextAlign.center, sortKey: 'Result'),
+      const GridCol('No.', 40, TextAlign.center, sortKey: 'No.', pin: true),
+      const GridCol('Student', 180, TextAlign.left, sortKey: 'Name', flex: true, pin: true),
+      const GridCol('Sex', 40, TextAlign.center, sortKey: 'Sex'),
+      for (final subject in widget.subjects) GridCol(subject, 84, TextAlign.right, sortKey: subject),
+      const GridCol('Total', 64, TextAlign.right, sortKey: 'Total'),
+      const GridCol('Average', 72, TextAlign.right, sortKey: 'Average'),
+      const GridCol('Rank', 56, TextAlign.center, sortKey: 'Rank'),
+      const GridCol('Result', 72, TextAlign.center, sortKey: 'Result'),
     ];
     final lines = <List<String>>[
       for (final row in shown)
