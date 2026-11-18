@@ -10,14 +10,14 @@ void main() {
     var grid = tester.widget<DataGrid>(find.byType(DataGrid));
     expect(grid.rows.first[1], 'Abel Tesfamariam');
     expect(grid.rows.first[6], '1');
-    expect(find.textContaining('Rank 1 is at the top'), findsOneWidget);
+    expect(grid.rows[1][6], '2');
+    expect(grid.rows[2][6], '4');
 
     await tester.tap(find.text('Ascending'));
     await tester.pump();
     grid = tester.widget<DataGrid>(find.byType(DataGrid));
     expect(grid.rows.last[1], 'Abel Tesfamariam');
     expect(grid.rows.last[6], '1');
-    expect(find.textContaining('Rank 1 is at the bottom'), findsOneWidget);
 
     await tester.enterText(find.widgetWithText(TextField, 'Find a student'), 'Yon');
     await tester.pump();

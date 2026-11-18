@@ -7,7 +7,8 @@ import 'school_rules.dart';
 const demoSource = 'mac-demo';
 
 List<int> parseRollNumbers(String text) {
-  final prepared = text.replaceAllMapped(RegExp(r'(\d+)\s*-\s*(\d+)'), (match) => '${match.group(1)}-${match.group(2)}');
+  final normalized = text.replaceAll('，', ',').replaceAll('、', ',').replaceAll(';', ',');
+  final prepared = normalized.replaceAllMapped(RegExp(r'(\d+)\s*-\s*(\d+)'), (match) => '${match.group(1)}-${match.group(2)}');
   final found = <int>[];
   for (final part in prepared.split(RegExp(r'[,\s]+'))) {
     if (part.isEmpty) continue;
@@ -76,7 +77,7 @@ class SchoolBook {
     if (_file.existsSync()) {
       try {
         final decoded = jsonDecode(_file.readAsStringSync());
-        if (decoded is Map && decoded['seed'] == 8) {
+        if (decoded is Map && decoded['seed'] == 9) {
           state = Map<String, dynamic>.from(_norm(decoded) as Map);
           return;
         }
@@ -131,17 +132,18 @@ class SchoolBook {
 
   Map<String, dynamic> _person(String key) {
     if (key == 'admin') {
-      return {'role': 'admin', 'display_name': 'Awet Gebremichael', 'staff_id': '', 'homeroom_class_ids': <String>[], 'teaching_ids': <String>[]};
+      return {'role': 'admin', 'display_name': 'School admin', 'person_name': 'Awet Gebremichael', 'staff_id': '', 'homeroom_class_ids': <String>[], 'teaching_ids': <String>[]};
     }
     if (key == 'director') {
-      return {'role': 'director', 'display_name': 'Solomon Tesfamariam', 'staff_id': '', 'homeroom_class_ids': <String>[], 'teaching_ids': <String>[]};
+      return {'role': 'director', 'display_name': 'Director', 'person_name': 'Solomon Tesfamariam', 'staff_id': '', 'homeroom_class_ids': <String>[], 'teaching_ids': <String>[]};
     }
     if (key == 'homeroom') {
       final cls = _byName(_classes(), '8-1');
       final staffId = cls['homeroom_staff_id'].toString();
       return {
         'role': 'teacher',
-        'display_name': 'Tesfay',
+        'display_name': 'Homeroom teacher',
+        'person_name': 'Tesfay Gebreyesus',
         'staff_id': staffId,
         'homeroom_class_ids': [cls['id'].toString()],
         'teaching_ids': _teachingIds(staffId),
@@ -151,7 +153,8 @@ class SchoolBook {
     final staffId = english['id'].toString();
     return {
       'role': 'teacher',
-      'display_name': 'Mehret',
+      'display_name': 'Subject teacher',
+      'person_name': 'Mehret Kahsay',
       'staff_id': staffId,
       'homeroom_class_ids': <String>[],
       'teaching_ids': _teachingIds(staffId),
@@ -1132,7 +1135,7 @@ class SchoolBook {
 
   Map<String, dynamic> _fresh() {
     state = {
-      'seed': 8,
+      'seed': 9,
       'seq': 0,
       'settings': {
         'academic_year': '2026',
@@ -1397,6 +1400,7 @@ class SchoolBook {
         pupilNo++;
       }
       _numberClass(cls['id'].toString());
+      if (cls['name'] == '1-1') _seedRecentAttendance(cls['id'].toString());
     }
     state['incomes'] = [
       {'id': _id('m'), 'amount': 12000, 'source': 'Registration', 'received_on': '2026-09-01', 'note': ''},
@@ -1695,21 +1699,61 @@ class SchoolBook {
     if (!_seesSchool() && !_homes().contains(id) && who['staff_id']?.toString() != _byId(_classes(), id)['homeroom_staff_id'].toString()) {
       throw ApiException('Only the homeroom teacher can take attendance');
     }
-    final pupils = _pupils().where((s) => s['class_id'] == id && s['dropped_out'] != true).toList()
+    final pupils = _pupils().where((s) => s['class_id'].toString() == id && s['dropped_out'] != true).toList()
       ..sort((a, b) => ((a['roll_no'] as num?) ?? 0).compareTo((b['roll_no'] as num?) ?? 0));
-    final marks = (state['attendance'] as List).where((a) => (a as Map)['class_id'] == id && a['date'] == day).map((e) => Map<String, dynamic>.from(e as Map)).toList();
-    var present = 0;
-    for (final mark in marks) {
-      if (mark['present'] == true) present++;
-    }
+    final marks = (state['attendance'] as List).where((a) => (a as Map)['class_id'].toString() == id && a['date'] == day).map((e) => Map<String, dynamic>.from(e as Map)).toList();
+    final absent = marks.where((mark) => mark['present'] == false).length;
+    final present = pupils.length - absent < 0 ? 0 : pupils.length - absent;
     final month = day.length >= 7 ? day.substring(0, 7) : '';
     final monthMarks = (state['attendance'] as List).where((a) {
       final row = a as Map;
-      return row['class_id'] == id && row['date'].toString().startsWith(month);
+      return row['class_id'].toString() == id && row['date'].toString().startsWith(month);
     }).toList();
     final monthPresent = monthMarks.where((a) => (a as Map)['present'] == true).length;
     final percent = monthMarks.isEmpty ? 0 : round2(monthPresent / monthMarks.length * 100);
-    return {'class_id': id, 'date': day, 'students': pupils, 'marks': marks, 'present': present, 'percent': percent};
+    return {
+      'class_id': id,
+      'date': day,
+      'students': [
+        for (final student in pupils)
+          {
+            'id': student['id'],
+            'full_name': student['full_name'],
+            'sex': student['sex'],
+            'roll_no': (student['roll_no'] as num?)?.toInt() ?? 0,
+            'dropped_out': false,
+          },
+      ],
+      'marks': marks,
+      'enrolled': pupils.length,
+      'present': present,
+      'percent': percent,
+    };
+  }
+
+  void _seedRecentAttendance(String classId) {
+    final pupils = (state['students'] as List).where((s) => (s as Map)['class_id'].toString() == classId).map((e) => e as Map).toList();
+    pupils.sort((a, b) => ((a['roll_no'] as num?) ?? 0).compareTo((b['roll_no'] as num?) ?? 0));
+    final today = DateTime.now();
+    for (var back = 0; back < 12; back++) {
+      final day = today.subtract(Duration(days: back));
+      if (day.weekday == DateTime.saturday || day.weekday == DateTime.sunday) continue;
+      final iso = '${day.year.toString().padLeft(4, '0')}-${day.month.toString().padLeft(2, '0')}-${day.day.toString().padLeft(2, '0')}';
+      for (final student in pupils) {
+        final roll = (student['roll_no'] as num?)?.toInt() ?? 0;
+        final away = (back == 0 && roll == 9) || (back == 2 && roll == 4);
+        _push('attendance', {
+          'id': _id('at'),
+          'student_id': student['id'],
+          'class_id': classId,
+          'roll_number': roll,
+          'date': iso,
+          'present': !away,
+          'updated_at': '${iso}T08:00:00',
+          'source_id': demoSource,
+        });
+      }
+    }
   }
 
   bool _canTakeAttendance(String classId) => _isAdmin() || _homes().contains(classId);

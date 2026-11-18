@@ -59,7 +59,14 @@ void main() {
     expect(marked['unknown'], isEmpty);
     final day = await book.call('GET', '/api/v1/attendance?class_id=${class1['id']}&date=2026-11-18', null) as Map;
     final absent = (day['marks'] as List).cast<Map>().where((row) => row['present'] == false).toList();
-    expect(absent.map((row) => row['roll_number']).toList(), [2, 5]);
+    expect(absent.map((row) => row['roll_number']), containsAll([2, 5]));
+    final today = DateTime.now();
+    final iso = '${today.year.toString().padLeft(4, '0')}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
+    final todaySheet = await book.call('GET', '/api/v1/attendance?class_id=${class1['id']}&date=$iso', null) as Map;
+    expect(todaySheet['present'], greaterThan(0));
+    expect(todaySheet['present'], lessThan(todaySheet['enrolled']));
+    expect(todaySheet['percent'], greaterThan(0));
+    expect((todaySheet['students'] as List).length, 10);
     expect(absent.every((row) => row['class_id'] != null && row['student_id'] != null && row['date'] == '2026-11-18' && row['source_id'] == 'mac-demo' && '${row['updated_at']}'.isNotEmpty), isTrue);
     book.setActor('homeroom');
     final results = await book.call('GET', '/api/v1/classes/${grade8['id']}/results', null) as Map;

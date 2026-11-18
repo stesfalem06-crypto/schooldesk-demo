@@ -108,14 +108,6 @@ num? _number(Map<String, dynamic> row, String key) {
   return null;
 }
 
-String rankPlace(List<Map<String, dynamic>> rows) {
-  final ranked = rows.where((row) => row['rank'] is num).toList();
-  if (ranked.isEmpty) return '';
-  if (ranked.first['rank'] == 1) return 'Rank 1 is at the top';
-  if (ranked.last['rank'] == 1) return 'Rank 1 is at the bottom';
-  return '';
-}
-
 String oneDecimal(Object? value) {
   if (value is num) return value.toStringAsFixed(1);
   return '$value';
@@ -157,14 +149,14 @@ class _MarksTableState extends State<MarksTable> {
   Widget build(BuildContext context) {
     final shown = orderRows(widget.rows, sortKey: sortKey, descending: descending, query: filter.text);
     final columns = [
-      const GridCol('No.', 64, TextAlign.center, sortKey: 'No.'),
-      const GridCol('Student', 210, TextAlign.left, sortKey: 'Name'),
-      const GridCol('Sex', 64, TextAlign.center, sortKey: 'Sex'),
-      for (final subject in widget.subjects) GridCol(subject, 168, TextAlign.right, sortKey: subject),
-      const GridCol('Total', 84, TextAlign.right, sortKey: 'Total'),
-      const GridCol('Average', 100, TextAlign.right, sortKey: 'Average'),
-      const GridCol('Rank', 76, TextAlign.center, sortKey: 'Rank'),
-      const GridCol('Result', 88, TextAlign.center, sortKey: 'Result'),
+      const GridCol('No.', 48, TextAlign.center, sortKey: 'No.'),
+      const GridCol('Student', 220, TextAlign.left, sortKey: 'Name'),
+      const GridCol('Sex', 48, TextAlign.center, sortKey: 'Sex'),
+      for (final subject in widget.subjects) GridCol(subject, 96, TextAlign.right, sortKey: subject),
+      const GridCol('Total', 80, TextAlign.right, sortKey: 'Total'),
+      const GridCol('Average', 80, TextAlign.right, sortKey: 'Average'),
+      const GridCol('Rank', 64, TextAlign.center, sortKey: 'Rank'),
+      const GridCol('Result', 80, TextAlign.center, sortKey: 'Result'),
     ];
     final lines = <List<String>>[
       for (final row in shown)
@@ -191,7 +183,7 @@ class _MarksTableState extends State<MarksTable> {
         descending = value != 'Name';
       }),
       onDirection: (down) => setState(() => descending = down),
-      status: 'Showing ${shown.length} of ${widget.rows.length}. ${rankPlace(shown)}'.trim(),
+      status: 'Showing ${shown.length} of ${widget.rows.length}',
     );
     final grid = DataGrid(columns: columns, rows: lines, expand: widget.expand, sortKey: sortKey, descending: descending, onSort: _header);
     if (!widget.expand) {

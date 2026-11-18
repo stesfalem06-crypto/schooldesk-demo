@@ -263,9 +263,11 @@ class AttendanceScreen extends StatefulWidget {
 class _AttendanceScreenState extends State<AttendanceScreen> {
   Map<String, dynamic>? data;
   List<Map<String, dynamic>> classes = [];
+  List<Map<String, dynamic>> roster = [];
   String? classId;
   final dateBox = TextEditingController();
   final numbers = TextEditingController();
+  var ready = false;
   var smokeSaved = false;
 
   @override
@@ -290,10 +292,17 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     }
     classId ??= _firstClass(model);
     if (classId == null || classId!.isEmpty) {
+      ready = true;
       if (mounted) setState(() {});
       return;
     }
+    final people = asMaps(await model.ask((api) => api.get('/api/v1/students?class_id=$classId')));
+    roster = people.where((s) => s['dropped_out'] != true).toList()
+      ..sort((a, b) => ((a['roll_no'] as num?) ?? 0).compareTo((b['roll_no'] as num?) ?? 0));
     data = Map<String, dynamic>.from(await model.ask((api) => api.get('/api/v1/attendance?class_id=$classId&date=${dateBox.text.trim()}')) as Map);
+    final fromSheet = asMaps(data?['students']);
+    if (roster.isEmpty && fromSheet.isNotEmpty) roster = fromSheet;
+    ready = true;
     if (mounted) setState(() {});
     if (!smokeSaved && widget.smokeNumbers != null && widget.smokeNumbers!.isNotEmpty) {
       smokeSaved = true;
@@ -310,24 +319,25 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     return classes.isEmpty ? null : classes.first['id'].toString();
   }
 
-  List<Map<String, dynamic>> get _matched {
-    final students = asMaps(data?['students']);
-    final byRoll = {for (final student in students) (student['roll_no'] as num?)?.toInt() ?? 0: student};
-    return [for (final number in parseRollNumbers(numbers.text)) if (byRoll[number] != null) byRoll[number]!];
-  }
+  List<int> get _typed => parseRollNumbers(numbers.text);
 
-  List<int> get _unknown {
-    final students = asMaps(data?['students']);
-    final known = {for (final student in students) (student['roll_no'] as num?)?.toInt() ?? 0};
-    return [for (final number in parseRollNumbers(numbers.text)) if (!known.contains(number)) number];
-  }
+  Map<int, Map<String, dynamic>> get _byRoll => {
+        for (final student in roster)
+          if (((student['roll_no'] as num?)?.toInt() ?? 0) > 0) (student['roll_no'] as num).toInt(): student,
+      };
+
+  List<Map<String, dynamic>> get _matched => [for (final number in _typed) if (_byRoll[number] != null) _byRoll[number]!];
+
+  List<int> get _unknown => [for (final number in _typed) if (!_byRoll.containsKey(number)) number];
 
   @override
   Widget build(BuildContext context) {
-    final students = asMaps(data?['students']);
     final marks = asMaps(data?['marks']);
     final matched = _matched;
-    final unknown = _unknown;
+    final unknown = ready ? _unknown : const <int>[];
+    final enrolled = roster.length;
+    final absentToday = marks.where((mark) => mark['present'] == false).length;
+    final present = data == null ? 0 : (enrolled - absentToday < 0 ? 0 : enrolled - absentToday);
     return SchoolScaffold(
       title: 'Attendance',
       hint: 'This month ${data?['percent'] ?? 0}%',
@@ -335,19 +345,22 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          Text('Present today ${data?['present'] ?? 0}', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: navy)),
+          Text('Present today $present', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: navy)),
           if (classes.isNotEmpty)
             DropdownButton<String>(
               value: classId,
               items: [for (final cls in classes) DropdownMenuItem(value: cls['id'].toString(), child: Text(cls['name'].toString()))],
               onChanged: (value) {
                 classId = value;
+                ready = false;
                 load();
               },
             ),
           TextField(controller: dateBox, decoration: const InputDecoration(labelText: 'Date'), onSubmitted: (_) => load()),
           TextField(
+            key: const Key('absent-numbers'),
             controller: numbers,
+            keyboardType: TextInputType.text,
             decoration: const InputDecoration(labelText: 'Absent roll numbers', hintText: '2, 5 or 4-6'),
             onChanged: (_) => setState(() {}),
           ),
@@ -356,14 +369,16 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
             Text('Absent today: ${matched.map((s) => s['full_name']).join(', ')}', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
             for (final student in matched) Text('${student['roll_no']} ${student['full_name']}', style: const TextStyle(fontSize: 16)),
           ],
-          if (unknown.isNotEmpty) Text('No student with number ${unknown.join(', ')}', style: const TextStyle(fontSize: 16, color: failRed, fontWeight: FontWeight.w700)),
+          for (final number in unknown)
+            Text('No student with number $number', style: const TextStyle(fontSize: 16, color: failRed, fontWeight: FontWeight.w700)),
           const SizedBox(height: 8),
           FilledButton(onPressed: saveNumbers, child: const Text('Save absences')),
           if (data?['saved'] != null) Text(data!['saved'].toString(), style: const TextStyle(fontSize: 16)),
           const SizedBox(height: 12),
-          const Text('Or mark one student', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
-          for (final student in students)
-            SoftCard(
+          Text(roster.isEmpty ? 'No students in this class yet' : '${roster.length} students', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+          for (final student in roster)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 4),
               child: Row(children: [
                 SizedBox(width: 36, child: Text('${student['roll_no'] ?? ''}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800))),
                 Expanded(child: Text(student['full_name'].toString(), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700))),
@@ -404,11 +419,11 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   Future<void> mark(String id, bool present) async {
     final model = context.read<AppModel>();
     if (Platform.environment['FLUTTER_TEST'] == 'true') {
-      SchoolBook.instance.callNow('POST', '/api/v1/attendance', {'class_id': model.homerooms.first, 'student_id': id, 'date': _day(), 'present': present});
+      SchoolBook.instance.callNow('POST', '/api/v1/attendance', {'class_id': classId ?? model.homerooms.first, 'student_id': id, 'date': dateBox.text.trim(), 'present': present});
       if (mounted) setState(() => data = {...?data, 'saved': 'Attendance saved'});
       return;
     }
-    await model.ask((api) => api.post('/api/v1/attendance', {'class_id': model.homerooms.first, 'student_id': id, 'date': _day(), 'present': present}));
+    await model.ask((api) => api.post('/api/v1/attendance', {'class_id': classId ?? model.homerooms.first, 'student_id': id, 'date': dateBox.text.trim(), 'present': present}));
     await load();
     if (mounted) saved(context, 'Attendance saved');
   }

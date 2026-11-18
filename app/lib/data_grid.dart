@@ -104,7 +104,7 @@ class _DataGridState extends State<DataGrid> {
   }
 
   Widget _cell(String text, GridCol col, {required bool head}) {
-    final style = TextStyle(fontSize: 14, fontWeight: head ? FontWeight.w800 : FontWeight.w600, color: ink);
+    final style = TextStyle(fontSize: head ? 12 : 14, fontWeight: head ? FontWeight.w800 : FontWeight.w600, color: ink);
     final label = Text(text, maxLines: 1, softWrap: false, overflow: TextOverflow.fade, textAlign: col.align, style: style);
     if (!head || widget.sortKey != col.key) return label;
     final arrow = Icon(widget.descending ? Icons.arrow_downward : Icons.arrow_upward, size: 14, color: ink);
@@ -132,7 +132,7 @@ class _DataGridState extends State<DataGrid> {
               child: InkWell(
                 onTap: head && widget.onSort != null ? () => widget.onSort!(widget.columns[i].key) : null,
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
                   child: _cell(i < values.length ? values[i] : '', widget.columns[i], head: head),
                 ),
               ),

@@ -137,6 +137,8 @@ class _Top extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final role = model.user['display_name']?.toString() ?? 'Staff';
+    final person = model.user['person_name']?.toString() ?? '';
+    final who = person.isEmpty ? role : '$role · $person';
     return Material(
       color: Colors.white,
       child: Padding(
@@ -146,7 +148,7 @@ class _Top extends StatelessWidget {
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text(model.school.isEmpty ? 'Hope Academy' : model.school, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: ink)),
-              Text(role, style: const TextStyle(fontSize: 14, color: Color(0xFF5C6B7A))),
+              Text(who, style: const TextStyle(fontSize: 14, color: Color(0xFF5C6B7A))),
             ]),
           ),
           SizedBox(

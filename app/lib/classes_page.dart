@@ -111,17 +111,16 @@ class _ClassDetailScreenState extends State<ClassDetailScreen> {
     final fees = asMaps(data['fees']);
     final rows = asMaps(data['rows']);
     final subjects = (data['subjects'] as List?)?.map((e) => e.toString()).toList() ?? [];
-    final topRanks = rows.where((row) => row['rank'] is int).take(4).map((row) => row['rank']).join(', ');
     return SchoolScaffold(
       title: widget.name,
       hint: 'Homeroom ${data['homeroom'] ?? ''}',
       body: Padding(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('${head['active'] ?? 0} students · ${head['male'] ?? 0} boys · ${head['female'] ?? 0} girls · ${head['dropped'] ?? 0} left', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+          Text('${head['active'] ?? 0} active students, ${head['dropped'] ?? 0} left · ${head['male'] ?? 0} boys · ${head['female'] ?? 0} girls', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
           const SizedBox(height: 12),
           Wrap(spacing: 8, children: [
-            for (final label in ['Teachers', 'Fees', 'Marks'])
+            for (final label in ['Teachers', 'Students', 'Fees', 'Marks'])
               ChoiceChip(label: Text(label), selected: section == label, onSelected: (_) => setState(() => section = label)),
           ]),
           const SizedBox(height: 12),
@@ -144,15 +143,21 @@ class _ClassDetailScreenState extends State<ClassDetailScreen> {
                   ),
                 ),
             ])),
+          if (section == 'Students')
+            Expanded(child: ListView(children: [
+              if (context.watch<AppModel>().isAdmin)
+                Align(alignment: Alignment.centerLeft, child: OutlinedButton(onPressed: renumber, child: const Text('Renumber alphabetically'))),
+              const SizedBox(height: 8),
+              for (final row in rows)
+                ListTile(
+                  leading: Text('${row['roll'] ?? ''}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+                  title: Text(row['dropped'] == true ? '${row['name']} (left)' : '${row['name']}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+                  subtitle: Text('${row['sex'] ?? ''}'),
+                ),
+            ])),
           if (section == 'Marks') ...[
             const Text('Marks', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
-            Text('Each mark is out of 100. CA is out of 60 and the final is out of 40.', style: const TextStyle(fontSize: 15, color: Color(0xFF5C6B7A))),
-            Text('Ranks $topRanks', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
-            if (context.watch<AppModel>().isAdmin)
-              Align(
-                alignment: Alignment.centerLeft,
-                child: OutlinedButton(onPressed: renumber, child: const Text('Renumber alphabetically')),
-              ),
+            const Text('Marks are out of 100 (CA 60 + Final 40).', style: TextStyle(fontSize: 15, color: Color(0xFF5C6B7A))),
             const SizedBox(height: 6),
             Expanded(child: MarksTable(subjects: subjects, rows: rows)),
           ],
