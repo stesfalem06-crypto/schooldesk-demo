@@ -2,10 +2,12 @@ import 'package:material_ui/material_ui.dart';
 import 'package:provider/provider.dart';
 
 import 'app_state.dart';
+import 'classes_page.dart';
 import 'demo_extra.dart';
 import 'money.dart';
 import 'office.dart';
 import 'screens.dart';
+import 'school_book.dart';
 import 'shell.dart';
 import 'startup_log.dart';
 import 'theme.dart';
@@ -14,7 +16,9 @@ import 'widgets.dart';
 
 List<DeskItem> erpMenu(AppModel model) {
   final items = <DeskItem>[];
-  if (model.isAdmin || model.isDirector || model.isHomeroom) {
+  if (model.isAdmin || model.isDirector) {
+    items.add(const DeskItem('Classes', Icons.account_tree_outlined, ClassesScreen()));
+  } else if (model.isHomeroom) {
     items.add(const DeskItem('Students', Icons.groups_outlined, StudentsScreen()));
   }
   items.add(DeskItem('Marks & Results', Icons.grading_outlined, model.seesSchool ? const ResultsScreen() : const MarksScreen()));
@@ -44,6 +48,7 @@ List<DeskItem> _settings(AppModel model) {
   if (model.isAdmin) {
     return const [
       DeskItem('Set up school', Icons.tune, SetupScreen()),
+      DeskItem('Fee types', Icons.payments_outlined, FeeTypesScreen()),
       DeskItem('Notices', Icons.campaign_outlined, NoticeScreen()),
       DeskItem('Calendar', Icons.event_outlined, CalendarScreen()),
       DeskItem('Defaulters', Icons.warning_amber_outlined, DefaulterScreen()),
@@ -117,11 +122,31 @@ class _ErpDashboardState extends State<ErpDashboard> {
       'marks': 'Marks & Results',
       'results': 'Marks & Results',
       'students': 'Students',
+      'classes': 'Classes',
       'staff': 'Staff',
       'attendance': 'Attendance',
       'timetable': 'Timetable',
       'reports': 'Reports',
     };
+    if (page == 'class' || page == 'class-marks' || page == 'class-fees') {
+      final focus = page == 'class-marks' ? 'marks' : page == 'class-fees' ? 'fees' : 'overview';
+      final classes = asMaps(SchoolBook.instance.callNow('GET', '/api/v1/classes', null));
+      final match = classes.where((c) => c['name'] == 'Grade 8A').toList();
+      if (match.isEmpty) return;
+      Navigator.of(context).push(MaterialPageRoute(builder: (_) => ClassDetailScreen(id: match.first['id'].toString(), name: 'Grade 8A', focus: focus)));
+      return;
+    }
+    if (page == 'find' || page == 'profile') {
+      final hits = asMaps(SchoolBook.instance.callNow('GET', '/api/v1/search?q=Abel', null));
+      final students = hits.where((h) => h['kind'] == 'student').toList();
+      if (students.isEmpty) return;
+      if (page == 'profile') {
+        Navigator.of(context).push(MaterialPageRoute(builder: (_) => ProfileScreen(id: students.first['id'].toString())));
+      } else {
+        Navigator.of(context).push(MaterialPageRoute(builder: (_) => SearchScreen(query: 'Abel')));
+      }
+      return;
+    }
     final name = names[page];
     if (name == null) return;
     final host = DeskHost.of(context);

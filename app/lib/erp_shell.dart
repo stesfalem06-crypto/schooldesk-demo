@@ -3,6 +3,8 @@ import 'package:provider/provider.dart';
 
 import 'app_state.dart';
 import 'demo_extra.dart';
+import 'school_book.dart';
+import 'widgets.dart';
 import 'shell.dart';
 import 'startup_log.dart';
 import 'theme.dart';
@@ -23,6 +25,7 @@ class ErpShell extends StatefulWidget {
 
 class ErpShellState extends State<ErpShell> {
   final _search = TextEditingController();
+  List<Map<String, dynamic>> _hits = [];
   GlobalKey<NavigatorState> _navKey = GlobalKey<NavigatorState>();
   int _navFor = -1;
 
@@ -36,9 +39,24 @@ class ErpShellState extends State<ErpShell> {
 
   void _openSearch(String query) {
     final text = query.trim();
-    if (text.isEmpty) return;
+    if (text.isEmpty) {
+      setState(() => _hits = []);
+      return;
+    }
+    final model = context.read<AppModel>();
+    if (model.seesSchool) {
+      final hits = asMaps(SchoolBook.instance.callNow('GET', '/api/v1/search?q=${Uri.encodeQueryComponent(text)}', null));
+      setState(() => _hits = hits.where((h) => h['kind'] == 'student').take(8).toList());
+      return;
+    }
     _navKey.currentState?.push(MaterialPageRoute(builder: (_) => SearchScreen(query: text)));
     _search.clear();
+  }
+
+  void _openHit(Map<String, dynamic> hit) {
+    setState(() => _hits = []);
+    _search.clear();
+    _navKey.currentState?.push(MaterialPageRoute(builder: (_) => ProfileScreen(id: hit['id'].toString())));
   }
 
   @override
@@ -54,7 +72,7 @@ class ErpShellState extends State<ErpShell> {
         _Side(items: widget.items, index: widget.index, onSelect: widget.onSelect),
         Expanded(
           child: Column(children: [
-            _Top(model: model, search: _search, onSearch: _openSearch),
+            _Top(model: model, search: _search, onSearch: _openSearch, hits: _hits, onHit: _openHit),
             Container(
               width: double.infinity,
               color: Colors.white,
@@ -77,10 +95,12 @@ class ErpShellState extends State<ErpShell> {
 }
 
 class _Top extends StatelessWidget {
-  const _Top({required this.model, required this.search, required this.onSearch});
+  const _Top({required this.model, required this.search, required this.onSearch, required this.hits, required this.onHit});
   final AppModel model;
   final TextEditingController search;
   final ValueChanged<String> onSearch;
+  final List<Map<String, dynamic>> hits;
+  final ValueChanged<Map<String, dynamic>> onHit;
 
   @override
   Widget build(BuildContext context) {
@@ -89,7 +109,8 @@ class _Top extends StatelessWidget {
       color: Colors.white,
       child: Padding(
         padding: const EdgeInsets.fromLTRB(20, 10, 12, 10),
-        child: Row(children: [
+        child: Column(children: [
+          Row(children: [
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text(model.school.isEmpty ? 'Hope Academy' : model.school, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: ink)),
@@ -101,6 +122,7 @@ class _Top extends StatelessWidget {
             child: TextField(
               controller: search,
               decoration: const InputDecoration(hintText: 'Search students and staff', prefixIcon: Icon(Icons.search), isDense: true),
+              onChanged: onSearch,
               onSubmitted: onSearch,
             ),
           ),
@@ -109,6 +131,15 @@ class _Top extends StatelessWidget {
             onPressed: () => context.read<AppModel>().signOut(),
             child: const Text('Switch role'),
           ),
+        ]),
+          if (hits.isNotEmpty)
+            for (final hit in hits)
+              ListTile(
+                dense: true,
+                title: Text(hit['name'].toString(), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+                subtitle: const Text('Student'),
+                onTap: () => onHit(hit),
+              ),
         ]),
       ),
     );

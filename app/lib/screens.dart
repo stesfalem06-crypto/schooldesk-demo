@@ -7,6 +7,7 @@ import 'app_state.dart';
 import 'edition.dart';
 import 'grades.dart';
 import 'marks_grid.dart';
+import 'money.dart';
 import 'timetable_page.dart';
 import 'office.dart';
 import 'shell.dart';
@@ -786,6 +787,8 @@ class FeesScreen extends StatefulWidget {
 
 class _FeesScreenState extends State<FeesScreen> {
   List<Map<String, dynamic>> rows = [];
+  List<Map<String, dynamic>> types = [];
+  String? typeId;
   bool loading = true;
   String? classId;
 
@@ -795,9 +798,19 @@ class _FeesScreenState extends State<FeesScreen> {
   Future<void> load() async {
     final model = context.read<AppModel>();
     classId = model.homerooms.isNotEmpty ? model.homerooms.first : null;
+    types = asMaps(await model.ask((api) => api.get('/api/v1/fee-types')));
+    typeId ??= types.isEmpty ? null : types.first['id'].toString();
     final path = classId == null ? '/api/v1/fees' : '/api/v1/fees?class_id=$classId';
     rows = asMaps(await model.ask((api) => api.get(path)));
     if (context.mounted) setState(() => loading = false);
+  }
+
+  Map<String, dynamic> _typeRow(Map<String, dynamic> row) {
+    if (typeId == null) return row;
+    for (final type in asMaps(row['types'])) {
+      if (type['fee_type_id'].toString() == typeId) return type;
+    }
+    return row;
   }
 
   @override
@@ -815,18 +828,27 @@ class _FeesScreenState extends State<FeesScreen> {
               : ListView(
                   padding: const EdgeInsets.all(16),
                   children: [
+                    Wrap(spacing: 8, children: [
+                      for (final type in types)
+                        ChoiceChip(
+                          label: Text(type['name'].toString()),
+                          selected: typeId == type['id'].toString(),
+                          onSelected: (_) => setState(() => typeId = type['id'].toString()),
+                        ),
+                    ]),
+                    const SizedBox(height: 8),
                     for (final r in rows)
                       Card(
                         child: ListTile(
                           title: Text(r['full_name'].toString(), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
-                          subtitle: Text('Paid ${r['paid']}   Left ${r['remaining']}', style: TextStyle(fontSize: 16, color: (r['remaining'] as num? ?? 0) == 0 ? passGreen : failRed, fontWeight: FontWeight.w700)),
+                          subtitle: Text('Paid ${nfk(_typeRow(r)['paid'])}   Left ${nfk(_typeRow(r)['remaining'])}', style: TextStyle(fontSize: 16, color: ((_typeRow(r)['remaining'] as num?) ?? 0) == 0 ? passGreen : failRed, fontWeight: FontWeight.w700)),
                           onTap: () async {
                             final amount = await askNumber(context, 'Amount paid', hint: r['full_name'].toString());
                             if (amount == null || !context.mounted) return;
                             try {
                               final today = DateTime.now();
                               final date = '${today.year.toString().padLeft(4, '0')}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
-                              await context.read<AppModel>().ask((api) => api.post('/api/v1/fees', {'student_id': r['student_id'], 'amount': amount, 'paid_on': date}));
+                              await context.read<AppModel>().ask((api) => api.post('/api/v1/fees', {'student_id': r['student_id'], 'fee_type_id': typeId, 'amount': amount, 'paid_on': date}));
                               if (context.mounted) saved(context, 'Payment saved');
                               await load();
                             } on ApiException catch (e) {

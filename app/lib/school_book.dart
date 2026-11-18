@@ -49,7 +49,7 @@ class SchoolBook {
     if (_file.existsSync()) {
       try {
         final decoded = jsonDecode(_file.readAsStringSync());
-        if (decoded is Map && decoded['seed'] == 5) {
+        if (decoded is Map && decoded['seed'] == 6) {
           state = Map<String, dynamic>.from(_norm(decoded) as Map);
           return;
         }
@@ -169,6 +169,11 @@ class SchoolBook {
     if (method == 'GET' && tail == 'scores') return _scores(query['assessment_id']);
     if (method == 'POST' && tail == 'scores') return _setScore(body);
     if (method == 'POST' && tail == 'scores/undo') return {'ok': true};
+    if (method == 'GET' && tail.startsWith('classes/') && tail.endsWith('/sheet')) return _classSheet(tail.split('/')[1]);
+    if (method == 'GET' && tail.startsWith('students/') && tail.endsWith('/sheet')) return _studentSheet(tail.split('/')[1]);
+    if (method == 'GET' && tail == 'fee-types') return _feeTypes();
+    if (method == 'POST' && tail == 'fee-types') return _saveFeeType(body, null);
+    if (method == 'PUT' && tail.startsWith('fee-types/')) return _saveFeeType(body, tail.split('/')[1]);
     if (method == 'GET' && tail == 'fees') return _fees(query['class_id']);
     if (method == 'GET' && tail == 'payments') return _rows('payments');
     if (method == 'POST' && tail == 'fees') return _pay(body);
@@ -487,21 +492,68 @@ class SchoolBook {
     return row;
   }
 
-  double get _fee => ((state['settings'] as Map)['yearly_fee'] as num?)?.toDouble() ?? 0;
+  List<Map<String, dynamic>> _feeTypes() {
+    final rows = _rows('fee_types');
+    if (rows.isNotEmpty) return rows;
+    final amount = ((state['settings'] as Map)['yearly_fee'] as num?)?.toDouble() ?? 0;
+    return [
+      {'id': 'yearly', 'name': 'Yearly fee', 'amount': amount},
+    ];
+  }
 
-  double _paid(String studentId) {
+  double get _fee => _feeTypes().fold<double>(0, (sum, type) => round2(sum + ((type['amount'] as num?)?.toDouble() ?? 0)));
+
+  double _typeAmount(String typeId) {
+    for (final type in _feeTypes()) {
+      if (type['id'].toString() == typeId) return (type['amount'] as num?)?.toDouble() ?? 0;
+    }
+    return 0;
+  }
+
+  double _paid(String studentId, [String? typeId]) {
     var sum = 0.0;
     for (final row in _rows('payments')) {
-      if (row['student_id'].toString() == studentId) sum += (row['amount'] as num).toDouble();
+      if (row['student_id'].toString() != studentId) continue;
+      if (typeId != null && row['fee_type_id']?.toString() != typeId) continue;
+      sum += (row['amount'] as num).toDouble();
     }
     return round2(sum);
+  }
+
+  String _typeForPayment(String studentId, String? requested) {
+    if (requested != null && requested.isNotEmpty) return requested;
+    for (final type in _feeTypes()) {
+      final due = (type['amount'] as num?)?.toDouble() ?? 0;
+      if (round2(due - _paid(studentId, type['id'].toString())) > 0) return type['id'].toString();
+    }
+    return _feeTypes().first['id'].toString();
+  }
+
+  Map<String, dynamic> _saveFeeType(Map<String, dynamic> body, String? id) {
+    if (!_isAdmin()) throw ApiException('Only the school admin can change fee types');
+    final name = body['name']?.toString().trim() ?? '';
+    final amount = (body['amount'] as num?)?.toDouble() ?? double.tryParse(body['amount']?.toString() ?? '') ?? 0;
+    if (name.isEmpty) throw ApiException('Type the fee name');
+    if (amount <= 0) throw ApiException('Type the amount');
+    if (id == null) {
+      final row = {'id': _id('fee'), 'name': name, 'amount': amount};
+      state['fee_types'] = [..._feeTypes().where((t) => t['id'] != 'yearly'), row];
+      return row;
+    }
+    final next = _feeTypes().map((type) {
+      if (type['id'].toString() != id) return type;
+      return {'id': id, 'name': name, 'amount': amount};
+    }).toList();
+    state['fee_types'] = next;
+    return next.firstWhere((type) => type['id'].toString() == id);
   }
 
   List<Map<String, dynamic>> _fees(String? classId) {
     _require();
     final rows = <Map<String, dynamic>>[];
     for (final student in _students(classId)) {
-      final paid = _paid(student['id'].toString());
+      final id = student['id'].toString();
+      final paid = _paid(id);
       rows.add({
         'student_id': student['id'],
         'full_name': student['full_name'],
@@ -509,6 +561,16 @@ class SchoolBook {
         'due': _fee,
         'paid': paid,
         'remaining': round2(_fee - paid),
+        'types': [
+          for (final type in _feeTypes())
+            {
+              'fee_type_id': type['id'],
+              'name': type['name'],
+              'due': type['amount'],
+              'paid': _paid(id, type['id'].toString()),
+              'remaining': round2(((type['amount'] as num?)?.toDouble() ?? 0) - _paid(id, type['id'].toString())),
+            },
+        ],
       });
     }
     return rows;
@@ -521,11 +583,14 @@ class SchoolBook {
     }
     final amount = (body['amount'] as num?)?.toDouble() ?? 0;
     if (amount <= 0) throw ApiException('Type the amount');
-    final remaining = round2(_fee - _paid(student['id'].toString()));
+    final typeId = _typeForPayment(student['id'].toString(), body['fee_type_id']?.toString());
+    final due = _typeAmount(typeId);
+    final remaining = round2(due - _paid(student['id'].toString(), typeId));
     if (amount > remaining) throw ApiException('that is more than the fee still owed');
     final row = {
       'id': _id('pay'),
       'student_id': student['id'],
+      'fee_type_id': typeId,
       'academic_year': (state['settings'] as Map)['academic_year'],
       'amount': amount,
       'paid_on': body['paid_on']?.toString() ?? '',
@@ -1009,7 +1074,7 @@ class SchoolBook {
 
   Map<String, dynamic> _fresh() {
     state = {
-      'seed': 5,
+      'seed': 6,
       'seq': 0,
       'settings': {
         'academic_year': '2026',
@@ -1033,6 +1098,7 @@ class SchoolBook {
       'assessments': <Map<String, dynamic>>[],
       'scores': <Map<String, dynamic>>[],
       'payments': <Map<String, dynamic>>[],
+      'fee_types': <Map<String, dynamic>>[],
       'incomes': <Map<String, dynamic>>[],
       'expenses': <Map<String, dynamic>>[],
       'workshops': <Map<String, dynamic>>[],
@@ -1077,6 +1143,10 @@ class SchoolBook {
 
     final samuel = person('Samuel Bekele', 'M', 'teaching', 'degree');
     final meron = person('Meron Alemu', 'F', 'teaching', 'degree');
+    final yearly = {'id': _id('fee'), 'name': 'Yearly fee', 'amount': 4500.0};
+    final stationery = {'id': _id('fee'), 'name': 'Stationery fee', 'amount': 800.0};
+    final sportsFee = {'id': _id('fee'), 'name': 'Sports fee', 'amount': 500.0};
+    state['fee_types'] = [yearly, stationery, sportsFee];
     final extraScience = person('Sara Tesfaye', 'F', 'teaching', 'degree');
     final extraSocial = person('Yonas Bekele', 'M', 'teaching', 'degree');
     var teacherNo = 0;
@@ -1156,9 +1226,16 @@ class SchoolBook {
             _push('scores', {'id': _id('sc'), 'assessment_id': assessment['id'], 'student_id': student['id'], 'score': score > max ? max : score, 'revision': 1, 'updated_at': ''});
           }
         }
-        final pay = n % 3 == 0 ? 4500 : (n % 3 == 1 ? 1500 : 0);
-        if (pay > 0) {
-          _push('payments', {'id': _id('pay'), 'student_id': student['id'], 'academic_year': '2026', 'amount': pay, 'paid_on': '2026-09-12'});
+        void payType(Map<String, dynamic> type, num amount) {
+          if (amount <= 0) return;
+          _push('payments', {'id': _id('pay'), 'student_id': student['id'], 'fee_type_id': type['id'], 'academic_year': '2026', 'amount': amount, 'paid_on': '2026-09-12'});
+        }
+        if (n % 3 == 0) {
+          payType(yearly, 4500);
+          payType(stationery, 800);
+          payType(sportsFee, 200);
+        } else if (n % 3 == 1) {
+          payType(yearly, 1500);
         }
         if (cls['name'] == 'Grade 8A') {
           for (final day in ['2026-11-02', '2026-11-03', '2026-11-04', '2026-11-05']) {
@@ -1197,6 +1274,134 @@ class SchoolBook {
     _push('calendar', {'id': _id('cal'), 'date': '2026-09-01', 'title': 'Term 1 starts', 'kind': 'term'});
     _push('calendar', {'id': _id('cal'), 'date': '2026-11-20', 'title': 'Mid exam', 'kind': 'exam'});
     _push('calendar', {'id': _id('cal'), 'date': '2026-12-24', 'title': 'Holiday', 'kind': 'holiday'});
+  }
+
+  Map<String, dynamic> _runningMark(Map<String, dynamic> lesson, String studentId) {
+    _ensureIndex();
+    final assessments = _assessmentsByLesson![lesson['id'].toString()] ?? const <Map<String, dynamic>>[];
+    var got = 0.0;
+    var possible = 0.0;
+    var entered = 0;
+    for (final assessment in assessments) {
+      final score = _scoreIndex![assessment['id'].toString()]?[studentId];
+      if (score == null || score['score'] == null) continue;
+      got += (score['score'] as num).toDouble();
+      possible += (assessment['max_marks'] as num?)?.toDouble() ?? 0;
+      entered++;
+    }
+    return {'got': round2(got), 'possible': round2(possible), 'entered': entered};
+  }
+
+  Map<String, dynamic> _classSheet(String classId) {
+    if (!_seesSchool()) throw ApiException('That is for the office');
+    final cls = _byId(_classes(), classId);
+    final lessons = _lessons().where((l) => l['class_id'].toString() == classId).toList();
+    final pupils = _pupils().where((s) => s['class_id'].toString() == classId).toList();
+    var male = 0, female = 0, dropped = 0;
+    for (final student in pupils) {
+      if (student['dropped_out'] == true) {
+        dropped++;
+        continue;
+      }
+      if (student['sex'] == 'M') male++;
+      if (student['sex'] == 'F') female++;
+    }
+    final active = pupils.where((s) => s['dropped_out'] != true).toList();
+    final fees = <Map<String, dynamic>>[];
+    for (final type in _feeTypes()) {
+      final dueEach = (type['amount'] as num?)?.toDouble() ?? 0;
+      var paid = 0.0;
+      var full = 0;
+      for (final student in active) {
+        final got = _paid(student['id'].toString(), type['id'].toString());
+        paid = round2(paid + got);
+        if (dueEach > 0 && got >= dueEach) full++;
+      }
+      final expected = round2(dueEach * active.length);
+      fees.add({
+        'fee_type_id': type['id'],
+        'name': type['name'],
+        'amount': dueEach,
+        'expected': expected,
+        'paid': paid,
+        'remaining': round2(expected - paid),
+        'fully_paid': full,
+        'students': active.length,
+      });
+    }
+    final subjects = [for (final lesson in lessons) lesson['subject_name'].toString()];
+    final rows = <Map<String, dynamic>>[];
+    for (final student in pupils) {
+      final marks = <String, Map<String, dynamic>>{};
+      var percents = <double>[];
+      for (final lesson in lessons) {
+        final mark = _runningMark(lesson, student['id'].toString());
+        marks[lesson['subject_name'].toString()] = mark;
+        final possible = (mark['possible'] as num).toDouble();
+        if (possible > 0) percents.add((mark['got'] as num).toDouble() / possible);
+      }
+      final average = percents.isEmpty ? 0.0 : percents.reduce((a, b) => a + b) / percents.length;
+      rows.add({
+        'id': student['id'],
+        'name': student['full_name'],
+        'sex': student['sex'],
+        'dropped': student['dropped_out'] == true,
+        'marks': marks,
+        'average': round2(average * 100),
+      });
+    }
+    final ranked = rows.where((row) => row['dropped'] != true).toList()
+      ..sort((a, b) => (b['average'] as num).compareTo(a['average'] as num));
+    var place = 0;
+    num? previous;
+    for (var i = 0; i < ranked.length; i++) {
+      final average = ranked[i]['average'] as num;
+      if (previous == null || average != previous) place = i + 1;
+      ranked[i]['rank'] = place;
+      previous = average;
+    }
+    for (final row in rows) {
+      row['rank'] ??= '';
+    }
+    return {
+      'class': cls,
+      'homeroom': cls['homeroom_name'],
+      'teachers': [
+        for (final lesson in lessons) {'subject': lesson['subject_name'], 'teacher': lesson['teacher_name']},
+      ],
+      'head': {'total': pupils.length, 'male': male, 'female': female, 'dropped': dropped, 'active': active.length},
+      'subjects': subjects,
+      'fees': fees,
+      'rows': rows,
+    };
+  }
+
+  Map<String, dynamic> _studentSheet(String studentId) {
+    if (!_seesSchool() && _homes().isEmpty) throw ApiException('That is for the office');
+    final student = _byId(_pupils(), studentId);
+    if (!_seesSchool() && !_homes().contains(student['class_id'].toString())) {
+      throw ApiException('That class is not yours');
+    }
+    final cls = _byId(_classes(), student['class_id'].toString());
+    final lessons = _lessons().where((l) => l['class_id'].toString() == cls['id'].toString()).toList();
+    final marks = <Map<String, dynamic>>[];
+    for (final lesson in lessons) {
+      final mark = _runningMark(lesson, studentId);
+      marks.add({'subject': lesson['subject_name'], 'teacher': lesson['teacher_name'], ...mark});
+    }
+    final fees = <Map<String, dynamic>>[];
+    for (final type in _feeTypes()) {
+      final due = (type['amount'] as num?)?.toDouble() ?? 0;
+      final paid = _paid(studentId, type['id'].toString());
+      fees.add({'name': type['name'], 'due': due, 'paid': paid, 'remaining': round2(due - paid)});
+    }
+    return {
+      'student': student,
+      'class_name': cls['name'],
+      'homeroom': cls['homeroom_name'],
+      'marks': marks,
+      'fees': fees,
+    };
   }
 
   List<Map<String, dynamic>> _search(String q) {

@@ -18,7 +18,8 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
     expect(find.text('Dashboard'), findsWidgets);
-    expect(find.text('Students'), findsWidgets);
+    expect(find.text('Classes'), findsWidgets);
+    expect(find.text('My class'), findsNothing);
     expect(find.textContaining('Pass rate'), findsWidgets);
     expect(find.textContaining('Nfk'), findsWidgets);
     expect(find.textContaining('Developed by'), findsWidgets);

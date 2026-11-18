@@ -75,13 +75,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
     load();
   }
 
+  Map<String, dynamic>? sheet;
+
   Future<void> load() async {
-    final all = asMaps(await context.read<AppModel>().ask((api) => api.get('/api/v1/students')));
-    final found = all.where((s) => s['id'].toString() == widget.id).toList();
-    if (found.isNotEmpty) {
-      student = found.first;
-      remark.text = student?['remark']?.toString() ?? '';
-    }
+    try {
+      final raw = await context.read<AppModel>().ask((api) => api.get('/api/v1/students/${widget.id}/sheet'));
+      sheet = (raw as Map).map((k, v) => MapEntry(k.toString(), v));
+      final person = sheet?['student'];
+      if (person is Map) {
+        student = person.map((k, v) => MapEntry(k.toString(), v));
+        remark.text = student?['remark']?.toString() ?? '';
+      }
+    } catch (_) {}
     if (mounted) setState(() {});
   }
 
@@ -96,11 +101,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
         padding: const EdgeInsets.all(16),
         children: [
           SoftCard(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('Class ${sheet?['class_name'] ?? ''}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+            Text('Homeroom teacher ${sheet?['homeroom'] ?? ''}', style: const TextStyle(fontSize: 18)),
             Text('Mother ${s['mother_name'] ?? ''}', style: const TextStyle(fontSize: 18)),
             Text('Father ${s['father_name'] ?? ''}', style: const TextStyle(fontSize: 18)),
             Text('Phone ${s['phone'] ?? ''}', style: const TextStyle(fontSize: 18)),
             Text('Address ${s['address'] ?? ''}', style: const TextStyle(fontSize: 18)),
           ])),
+          const SizedBox(height: 8),
+          const Text('Marks', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+          for (final mark in asMaps(sheet?['marks']))
+            Text('${mark['subject']}: ${mark['got']}/${mark['possible']}', style: const TextStyle(fontSize: 16)),
+          const SizedBox(height: 8),
+          const Text('Fees', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+          for (final fee in asMaps(sheet?['fees']))
+            Text('${fee['name']}: paid ${nfk(fee['paid'])}, left ${nfk(fee['remaining'])}', style: const TextStyle(fontSize: 16)),
           const SizedBox(height: 8),
           TextField(controller: remark, decoration: const InputDecoration(labelText: 'Homeroom remark')),
           const SizedBox(height: 8),

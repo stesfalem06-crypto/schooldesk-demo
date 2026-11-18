@@ -107,7 +107,7 @@ if [[ "$MODE" == "desk" || "$MODE" == "demo" ]]; then
   DATA="$HOME/Library/Application Support/SchoolDesk Demo"
   mkdir -p "$DATA"
   capture() {
-    local role="$1" page="$2" dest="$3" need="$4"
+    local role="$1" page="$2" dest="$3" need="$4" forbid="${5:-}"
     killall schooldesk || true
     sleep 1
     rm -f "$DATA/smoke-role" "$DATA/smoke-page"
@@ -141,7 +141,15 @@ for w in info {
         printf '%s\n' "$text"
         exit 1
       fi
-      if printf '%s\n' "$text" | grep -q "$need"; then
+      local ready=1
+      local part
+      IFS='|' read -ra parts <<< "$need"
+      for part in "${parts[@]}"; do
+        if ! printf '%s\n' "$text" | grep -q "$part"; then
+          ready=0
+        fi
+      done
+      if [[ "$ready" == 1 ]]; then
         break
       fi
     done
@@ -149,8 +157,16 @@ for w in info {
     local bmp="${dest%.png}.bmp"
     sips -s format bmp "$dest" --out "$bmp" >/dev/null
     python3 "$ROOT/scripts/not_blank.py" "$bmp"
-    if ! printf '%s\n' "$text" | grep -q "$need"; then
-      echo "missing '$need' on $dest"
+    local part
+    IFS='|' read -ra parts <<< "$need"
+    for part in "${parts[@]}"; do
+      if ! printf '%s\n' "$text" | grep -q "$part"; then
+        echo "missing '$part' on $dest"
+        exit 1
+      fi
+    done
+    if [[ -n "$forbid" ]] && printf '%s\n' "$text" | grep -q "$forbid"; then
+      echo "found '$forbid' on $dest"
       exit 1
     fi
     if [[ -z "$page" && -n "$role" ]] && ! printf '%s\n' "$text" | grep -q "Dashboard"; then
@@ -159,11 +175,16 @@ for w in info {
     fi
   }
   OUT="$(dirname "$SHOT")"
-  capture admin "" "$OUT/admin-home.png" "Dashboard"
-  capture director "" "$OUT/director-home.png" "Dashboard"
+  capture admin "" "$OUT/admin-home.png" "Classes" "My class"
+  capture director "" "$OUT/director-home.png" "Classes" "My class"
   capture homeroom "" "$OUT/homeroom-home.png" "Dashboard"
   capture subject "" "$OUT/subject-home.png" "Dashboard"
-  capture admin students "$OUT/students.png" "Add a student"
+  capture admin classes "$OUT/classes.png" "Grade 1A" "My class"
+  capture admin class "$OUT/class-detail.png" "Samuel Bekele|boys"
+  capture admin class-marks "$OUT/class-marks.png" "Mathematics"
+  capture admin class-fees "$OUT/class-fees.png" "Yearly|Left"
+  capture admin find "$OUT/student-search.png" "Abel"
+  capture admin profile "$OUT/student-profile.png" "Abel|Yearly|Mathematics"
   capture subject marks "$OUT/marks.png" "English"
   capture admin results "$OUT/results.png" "Make statistics"
   capture admin fees "$OUT/fees.png" "Whole school"
