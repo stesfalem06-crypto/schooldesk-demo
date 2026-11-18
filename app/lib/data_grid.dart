@@ -38,12 +38,32 @@ GridLayout layoutGrid(double available, List<GridCol> columns) {
     var width = col.width;
     final words = col.label.split(RegExp(r'\s+')).where((word) => word.isNotEmpty);
     if (words.length <= 1) {
-      final need = textWidth(col.label, headerStyle) + 8;
+      final need = textWidth(col.label, headerStyle) * 1.15 + 14;
       if (need > width) width = need;
     }
     widths.add(width);
   }
-  final sum = widths.fold(0.0, (total, width) => total + width);
+  var sum = widths.fold(0.0, (total, width) => total + width);
+  // Leave a small safety margin so the last column is never clipped.
+  final room = available.isFinite ? available - 48 : available;
+  final flexAt = columns.indexWhere((col) => col.flex);
+  if (room.isFinite && sum > room && flexAt >= 0) {
+    // First give back space from the student name column, down to 140.
+    final give = (widths[flexAt] - 140).clamp(0.0, sum - room);
+    widths[flexAt] -= give;
+    sum -= give;
+  }
+  if (room.isFinite && sum > room) {
+    // Then tighten every column a little, at most 15%, before scrolling.
+    final scale = room / sum;
+    if (scale >= 0.85) {
+      for (var i = 0; i < widths.length; i++) {
+        widths[i] = widths[i] * scale;
+      }
+      return GridLayout(widths, false);
+    }
+  }
+  available = room;
   if (!available.isFinite || available <= 0 || sum > available + 0.5) {
     return GridLayout(widths, available.isFinite && sum > available + 0.5);
   }
@@ -221,7 +241,10 @@ class _DataGridState extends State<DataGrid> {
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
           child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-            Text(label, maxLines: 2, softWrap: true, textAlign: col.align, style: headerStyle),
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(label, maxLines: 2, softWrap: false, textAlign: col.align, style: headerStyle),
+            ),
             if (sorted) Icon(widget.descending ? Icons.arrow_downward : Icons.arrow_upward, size: 12, color: ink),
           ]),
         ),
