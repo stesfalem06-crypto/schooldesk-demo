@@ -404,10 +404,10 @@ jobs:
         run: |
           set -euo pipefail
           test -f dist/SchoolDesk-Demo.dmg
-          if gh release view demo-v12 --repo "${{ github.repository }}" >/dev/null 2>&1; then
-            gh release upload demo-v12 dist/SchoolDesk-Demo.dmg --repo "${{ github.repository }}" --clobber
+          if gh release view demo-v13 --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            gh release upload demo-v13 dist/SchoolDesk-Demo.dmg --repo "${{ github.repository }}" --clobber
           else
-            gh release create demo-v12 dist/SchoolDesk-Demo.dmg \
+            gh release create demo-v13 dist/SchoolDesk-Demo.dmg \
               --repo "${{ github.repository }}" \
               --title "SchoolDesk Demo" \
               --notes "Standalone Mac demo. It opens on this computer with no server and no sign-in."

@@ -152,11 +152,11 @@ class _MarksTableState extends State<MarksTable> {
       const GridCol('No.', 40, TextAlign.center, sortKey: 'No.', pin: true),
       const GridCol('Student', 180, TextAlign.left, sortKey: 'Name', flex: true, pin: true),
       const GridCol('Sex', 40, TextAlign.center, sortKey: 'Sex'),
-      for (final subject in widget.subjects) GridCol(subject, 84, TextAlign.right, sortKey: subject),
-      const GridCol('Total', 64, TextAlign.right, sortKey: 'Total'),
+      for (final subject in widget.subjects) GridCol(subject, 72, TextAlign.right, sortKey: subject),
+      const GridCol('Total', 60, TextAlign.right, sortKey: 'Total'),
       const GridCol('Average', 72, TextAlign.right, sortKey: 'Average'),
-      const GridCol('Rank', 56, TextAlign.center, sortKey: 'Rank'),
-      const GridCol('Result', 72, TextAlign.center, sortKey: 'Result'),
+      const GridCol('Rank', 52, TextAlign.center, sortKey: 'Rank'),
+      const GridCol('Result', 64, TextAlign.center, sortKey: 'Result'),
     ];
     final lines = <List<String>>[
       for (final row in shown)

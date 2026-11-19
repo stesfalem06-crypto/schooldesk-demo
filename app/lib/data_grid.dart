@@ -22,6 +22,7 @@ class GridLayout {
 
 const headerStyle = TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: ink, height: 1.15);
 const _headerHeight = 64.0;
+const _cellStyle = TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: ink);
 
 double textWidth(String text, TextStyle style) {
   final painter = TextPainter(text: TextSpan(text: text, style: style), textDirection: TextDirection.ltr, maxLines: 1)..layout();
@@ -32,7 +33,7 @@ double textWidth(String text, TextStyle style) {
 /// so the header is never cut mid-word. Extra space goes to the flexible
 /// column. Horizontal scrolling starts only when the preferred widths are
 /// wider than [available].
-GridLayout layoutGrid(double available, List<GridCol> columns) {
+GridLayout layoutGrid(double available, List<GridCol> columns, {double minFlex = 140}) {
   final widths = <double>[];
   for (final col in columns) {
     var width = col.width;
@@ -48,17 +49,19 @@ GridLayout layoutGrid(double available, List<GridCol> columns) {
   final room = available.isFinite ? available - 48 : available;
   final flexAt = columns.indexWhere((col) => col.flex);
   if (room.isFinite && sum > room && flexAt >= 0) {
-    // First give back space from the student name column, down to 140.
-    final give = (widths[flexAt] - 140).clamp(0.0, sum - room);
+    // First give back spare space from the student name column, but never
+    // below the longest name, so names are not cut.
+    final give = (widths[flexAt] - minFlex).clamp(0.0, sum - room);
     widths[flexAt] -= give;
     sum -= give;
   }
   if (room.isFinite && sum > room) {
-    // Then tighten every column a little, at most 15%, before scrolling.
-    final scale = room / sum;
-    if (scale >= 0.85) {
+    // Then tighten the other columns, at most 20%, before scrolling.
+    final fixed = flexAt >= 0 ? widths[flexAt] : 0.0;
+    final scale = (room - fixed) / (sum - fixed);
+    if (scale >= 0.8) {
       for (var i = 0; i < widths.length; i++) {
-        widths[i] = widths[i] * scale;
+        if (i != flexAt) widths[i] = widths[i] * scale;
       }
       return GridLayout(widths, false);
     }
@@ -137,7 +140,17 @@ class _DataGridState extends State<DataGrid> {
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(builder: (context, constraints) {
-      final layout = layoutGrid(constraints.maxWidth, widget.columns);
+      final flexAt = widget.columns.indexWhere((col) => col.flex);
+      var minFlex = 140.0;
+      if (flexAt >= 0) {
+        for (final row in widget.rows) {
+          if (flexAt < row.length) {
+            final need = textWidth(row[flexAt], _cellStyle) * 1.1 + 16;
+            if (need > minFlex) minFlex = need;
+          }
+        }
+      }
+      final layout = layoutGrid(constraints.maxWidth, widget.columns, minFlex: minFlex);
       return Card(
         margin: EdgeInsets.zero,
         clipBehavior: Clip.antiAlias,
@@ -270,7 +283,7 @@ class _DataGridState extends State<DataGrid> {
                   softWrap: false,
                   overflow: TextOverflow.fade,
                   textAlign: widget.columns[i].align,
-                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: ink),
+                  style: _cellStyle,
                 ),
               ),
             ),

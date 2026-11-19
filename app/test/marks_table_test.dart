@@ -25,6 +25,13 @@ void main() {
     expect(headerLabel('Social studies', 70), 'Social\nstudies');
   });
 
+  test('long names keep their width when space is tight', () {
+    final layout = layoutGrid(800, _columns(4), minFlex: 170);
+    expect(layout.scrolls, isFalse);
+    expect(layout.widths[1], greaterThanOrEqualTo(170));
+    expect(layout.total, lessThanOrEqualTo(800));
+  });
+
   test('eight subjects scroll instead of squeezing Rank off the page', () {
     final layout = layoutGrid(990, _columns(8));
     expect(layout.scrolls, isTrue);
