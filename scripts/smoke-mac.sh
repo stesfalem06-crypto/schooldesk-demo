@@ -5,6 +5,8 @@ PORT="$2"
 SHOT="$3"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 MODE="${4:-check}"
+# Start from the sample school. A previous run can leave a promoted class in this file.
+rm -f "${HOME}/Library/Application Support/SchoolDesk Demo/school.json"
 startup_log() {
   echo "---- SchoolDesk startup log ----"
   local log="${HOME}/Library/Logs/SchoolDesk/startup.log"

@@ -61,6 +61,11 @@ class SchoolBook {
   }
 
   static String _defaultDirNow() {
+    // Tests open the demo through the app. Keep that file out of the
+    // folder the Mac app reloads, so the next launch still has the seeded school.
+    if (Platform.environment.containsKey('FLUTTER_TEST')) {
+      return Directory.systemTemp.createTempSync('schooldesk-demo').path;
+    }
     final home = Platform.environment['HOME'] ?? '';
     final folder = Platform.isMacOS
         ? '$home/Library/Application Support/SchoolDesk Demo'
@@ -79,6 +84,7 @@ class SchoolBook {
         final decoded = jsonDecode(_file.readAsStringSync());
         if (decoded is Map && decoded['seed'] == 9) {
           state = Map<String, dynamic>.from(_norm(decoded) as Map);
+          _dropCache();
           return;
         }
       } catch (_) {}
@@ -679,7 +685,7 @@ class SchoolBook {
           });
       bucket['classes'] = (bucket['classes'] as int) + 1;
       final section = {'id': cls['id'], 'name': cls['name'], 'students': 0, 'collected': 0.0, 'remaining': 0.0};
-      for (final student in _pupils().where((s) => s['class_id'] == cls['id'])) {
+      for (final student in _pupils().where((s) => s['class_id'].toString() == cls['id'].toString())) {
         final paid = _paid(student['id'].toString());
         final left = round2(_fee - paid);
         section['students'] = (section['students'] as int) + 1;
@@ -715,7 +721,7 @@ class SchoolBook {
     final detail = <String, List<Map<String, dynamic>>>{};
     _ensureIndex();
     final classLessons = _lessonsByClass![classId] ?? const <Map<String, dynamic>>[];
-    for (final student in _pupils().where((s) => s['class_id'] == classId)) {
+    for (final student in _pupils().where((s) => s['class_id'].toString() == classId)) {
       final totals = <double>[];
       final subjects = <Map<String, dynamic>>[];
       for (final lesson in classLessons) {
@@ -795,7 +801,7 @@ class SchoolBook {
   }
 
   Map<String, dynamic> _summary(String classId) {
-    final pupils = _pupils().where((s) => s['class_id'] == classId).toList();
+    final pupils = _pupils().where((s) => s['class_id'].toString() == classId).toList();
     var male = 0, female = 0, dropped = 0;
     for (final student in pupils) {
       if (student['sex'] == 'M') male++;
@@ -1041,7 +1047,7 @@ class SchoolBook {
       if (slot['id'] == moving['id']) continue;
       final sameTime = (slot['day'] as num).toInt() == day && (slot['period'] as num).toInt() == period;
       if (!sameTime) continue;
-      if (slot['class_id'] == moving['class_id'] || slot['teacher_staff_id'] == moving['teacher_staff_id']) {
+      if (slot['class_id'].toString() == moving['class_id'].toString() || slot['teacher_staff_id'].toString() == moving['teacher_staff_id'].toString()) {
         throw ApiException('That period is already taken');
       }
     }
@@ -1352,7 +1358,7 @@ class SchoolBook {
         };
         _push('students', student);
         final factor = factors[n];
-        for (final lesson in _lessons().where((l) => l['class_id'] == cls['id'])) {
+        for (final lesson in _lessons().where((l) => l['class_id'].toString() == cls['id'].toString())) {
           final shift = subjectShift[lesson['subject_name']] ?? 0.0;
           final level = (factor + shift).clamp(0.2, 1.0);
           for (final assessment in (state['assessments'] as List).where((a) => (a as Map)['class_subject_id'] == lesson['id'])) {
@@ -1667,7 +1673,7 @@ class SchoolBook {
   List<int> _roster(String classId) {
     final cls = _byId(_classes(), classId);
     final lines = <String>['Hope Academy', cls['name'].toString(), 'Homeroom ${cls['homeroom_name']}'];
-    for (final student in _pupils().where((s) => s['class_id'] == classId)) {
+    for (final student in _pupils().where((s) => s['class_id'].toString() == classId)) {
       lines.add('${student['full_name']}  ${student['sex']}');
     }
     return simplePdf('Class list', lines);
@@ -1683,7 +1689,7 @@ class SchoolBook {
     if (next.isEmpty) throw ApiException('There is no next grade for this class');
     var moved = 0;
     for (final student in _pupils()) {
-      if (student['class_id'] != cls['id'] || student['dropped_out'] == true) continue;
+      if (student['class_id'].toString() != cls['id'].toString() || student['dropped_out'] == true) continue;
       student['class_id'] = next.first['id'];
       _replace('students', student);
       moved++;
@@ -1817,7 +1823,7 @@ class SchoolBook {
     final source = body['source_id']?.toString() ?? demoSource;
     final rows = (state['attendance'] as List).cast<Map>();
     for (final row in rows) {
-      if (row['student_id'] == studentId && row['date'] == date && row['class_id'] == classId) {
+      if (row['student_id'].toString() == studentId && row['date'] == date && row['class_id'].toString() == classId) {
         final current = row['updated_at']?.toString() ?? '';
         if (current.isNotEmpty && now.compareTo(current) < 0) {
           _audit({'entity': 'attendance', 'student_id': studentId, 'class_id': classId, 'roll_number': student['roll_no'], 'date': date, 'action': 'kept', 'source_id': source, 'note': 'A newer attendance mark was already saved'});
