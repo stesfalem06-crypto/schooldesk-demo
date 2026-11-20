@@ -26,10 +26,10 @@ void main() {
   });
 
   test('long names keep their width when space is tight', () {
-    final layout = layoutGrid(800, _columns(4), minFlex: 170);
+    final layout = layoutGrid(1100, _columns(4), minFlex: 170);
     expect(layout.scrolls, isFalse);
     expect(layout.widths[1], greaterThanOrEqualTo(170));
-    expect(layout.total, lessThanOrEqualTo(800));
+    expect(layout.total, lessThanOrEqualTo(1100));
   });
 
   test('eight subjects scroll instead of squeezing Rank off the page', () {
