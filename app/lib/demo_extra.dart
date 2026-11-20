@@ -114,7 +114,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           DataGrid(
             expand: false,
             columns: const [
-              GridCol('Subject', 180, TextAlign.left),
+              GridCol('Subject', 180, TextAlign.left, flex: true),
               GridCol('CA / 60', 110, TextAlign.right),
               GridCol('Final / 40', 120, TextAlign.right),
               GridCol('Total / 100', 130, TextAlign.right),

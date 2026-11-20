@@ -253,7 +253,14 @@ class _DataGridState extends State<DataGrid> {
         height: _headerHeight,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-          child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+          child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: col.align == TextAlign.right
+                  ? CrossAxisAlignment.end
+                  : col.align == TextAlign.left
+                      ? CrossAxisAlignment.start
+                      : CrossAxisAlignment.center,
+              children: [
             FittedBox(
               fit: BoxFit.scaleDown,
               child: Text(label, maxLines: 2, softWrap: false, textAlign: col.align, style: headerStyle),
