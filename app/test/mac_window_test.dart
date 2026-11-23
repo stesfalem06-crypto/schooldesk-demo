@@ -22,7 +22,7 @@ void main() {
     expect(find.text('My class'), findsNothing);
     expect(find.textContaining('Pass rate'), findsWidgets);
     expect(find.textContaining('Nfk'), findsWidgets);
-    expect(find.textContaining('Developed by'), findsWidgets);
+    expect(find.textContaining('SHAMM TESFALEM'), findsWidgets);
     expectPlain(tester);
     expect(tester.takeException(), isNull);
     await tester.tap(find.byKey(const Key('nav-Timetable')));

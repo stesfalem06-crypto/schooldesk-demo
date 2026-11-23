@@ -37,7 +37,7 @@ var lockPage = []byte(`<!DOCTYPE html>
     <p class="msg" id="out"></p>
   </div>
 </main>
-<footer>Developed by 9 Multimedia and IT Solutions · SHAMM TESFALEM · 07162947</footer>
+<footer>9 Multimedia and IT solutions · SHAMM TESFALEM · 07162947</footer>
 <script>
 async function load() {
   const res = await fetch("/api/v1/license");
