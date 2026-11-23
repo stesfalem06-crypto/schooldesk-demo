@@ -69,19 +69,6 @@ func serve(serviceStop <-chan struct{}) {
 	}
 	defer st.Close()
 
-	n, err := st.CountUsers()
-	if err != nil {
-		log.Fatal(err)
-	}
-	if n == 0 {
-		if err := loadSample(st); err != nil {
-			log.Fatal(err)
-		}
-		note := filepath.Join(*data, "FIRST_LOGIN.txt")
-		_ = os.WriteFile(note, []byte(firstLogin), 0o600)
-		log.Print("Sample school is ready. Sign-in names are in FIRST_LOGIN.txt")
-	}
-
 	parts, err := license.Collect()
 	if err != nil {
 		log.Fatal(err)
@@ -95,7 +82,7 @@ func serve(serviceStop <-chan struct{}) {
 		log.Print("Restarting after an update")
 		os.Exit(0)
 	}}
-	api.MaybeAutoSemester()
+	go prepareSchool(st, api, *data)
 
 	port := portOf(*addr)
 	var stopAnnounce func()
@@ -161,6 +148,24 @@ func serve(serviceStop <-chan struct{}) {
 		stopAnnounce()
 	}
 	_ = server.Close()
+}
+
+func prepareSchool(st *store.Store, api *httpapi.API, data string) {
+	n, err := st.CountUsers()
+	if err != nil {
+		log.Print(err)
+		return
+	}
+	if n == 0 {
+		if err := loadSample(st); err != nil {
+			log.Print(err)
+			return
+		}
+		note := filepath.Join(data, "FIRST_LOGIN.txt")
+		_ = os.WriteFile(note, []byte(firstLogin), 0o600)
+		log.Print("Sample school is ready. Sign-in names are in FIRST_LOGIN.txt")
+	}
+	api.MaybeAutoSemester()
 }
 
 func serviceStopOrNever(stop <-chan struct{}) <-chan struct{} {

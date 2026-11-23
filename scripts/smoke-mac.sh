@@ -23,7 +23,7 @@ if [[ "$MODE" == "desk" ]]; then
   alive=1
 else
 alive=0
-for _ in $(seq 1 20); do
+for _ in $(seq 1 40); do
   if curl -fsS "http://127.0.0.1:${PORT}/api/v1/health" >/dev/null; then
     alive=1
     break

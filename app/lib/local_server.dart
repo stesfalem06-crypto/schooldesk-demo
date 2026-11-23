@@ -33,9 +33,9 @@ Future<LocalServer> startBundledServer() async {
       return LocalServer.notReady;
     }
   }
-  for (var i = 0; i < 50; i++) {
+  for (var i = 0; i < 80; i++) {
     if (await _portOpen() && await _matchesThisEdition()) return LocalServer.ready;
-    await Future<void>.delayed(const Duration(milliseconds: 100));
+    await Future<void>.delayed(const Duration(milliseconds: 250));
   }
   await logStartup('Server did not answer as the ${demoEdition ? 'demo' : 'school'} program on port $localPort');
   return LocalServer.notReady;
