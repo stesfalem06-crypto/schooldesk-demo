@@ -22,7 +22,11 @@ ThemeData schoolTheme() => demoEdition ? _erp() : _classic();
 ThemeData _classic() {
   final base = ThemeData(
     useMaterial3: true,
-    colorScheme: ColorScheme.fromSeed(seedColor: leaf, primary: leaf, surface: paper),
+    colorScheme: ColorScheme.fromSeed(
+      seedColor: leaf,
+      primary: leaf,
+      surface: paper,
+    ),
     scaffoldBackgroundColor: paper,
     fontFamily: 'Roboto',
   );
@@ -31,7 +35,10 @@ ThemeData _classic() {
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
       fillColor: card,
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: line)),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(color: line),
+      ),
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
     ),
     filledButtonTheme: FilledButtonThemeData(
@@ -39,7 +46,11 @@ ThemeData _classic() {
         backgroundColor: leaf,
         foregroundColor: Colors.white,
         minimumSize: const Size(64, 56),
-        textStyle: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
+        textStyle: const TextStyle(
+          fontFamily: 'Roboto',
+          fontSize: 20,
+          fontWeight: FontWeight.w700,
+        ),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       ),
     ),
@@ -49,7 +60,11 @@ ThemeData _classic() {
 ThemeData _erp() {
   final base = ThemeData(
     useMaterial3: true,
-    colorScheme: ColorScheme.fromSeed(seedColor: navy, primary: navy, surface: const Color(0xFFF4F6F8)),
+    colorScheme: ColorScheme.fromSeed(
+      seedColor: navy,
+      primary: navy,
+      surface: const Color(0xFFF4F6F8),
+    ),
     scaffoldBackgroundColor: const Color(0xFFF4F6F8),
     fontFamily: 'Roboto',
   );
@@ -59,13 +74,19 @@ ThemeData _erp() {
       color: Colors.white,
       elevation: 0,
       margin: EdgeInsets.zero,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(8)), side: BorderSide(color: line)),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.all(Radius.circular(8)),
+        side: BorderSide(color: line),
+      ),
     ),
     dividerColor: line,
     inputDecorationTheme: const InputDecorationTheme(
       filled: true,
       fillColor: Colors.white,
-      border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(8)), borderSide: BorderSide(color: line)),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.all(Radius.circular(8)),
+        borderSide: BorderSide(color: line),
+      ),
       contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 14),
     ),
     filledButtonTheme: FilledButtonThemeData(
@@ -73,7 +94,11 @@ ThemeData _erp() {
         backgroundColor: navy,
         foregroundColor: Colors.white,
         minimumSize: const Size(64, 48),
-        textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+        textStyle: const TextStyle(
+          fontFamily: 'Roboto',
+          fontSize: 16,
+          fontWeight: FontWeight.w700,
+        ),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       ),
     ),

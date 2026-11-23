@@ -10,28 +10,27 @@ permissions:
   contents: read
 
 jobs:
-  update-key:
+  purge-leaked-keys:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    permissions:
+      actions: write
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version: "1.22"
-          cache-dependency-path: server/go.sum
-      - name: Make a test update key
-        working-directory: server
-        run: go run ./cmd/updatekey -gen "$RUNNER_TEMP/shamm-keys"
-      - uses: actions/upload-artifact@v4
-        with:
-          name: update-key
-          retention-days: 1
-          path: |
-            ${{ runner.temp }}/shamm-keys/update.pub
-            ${{ runner.temp }}/shamm-keys/update.priv
-          if-no-files-found: error
+      - name: Delete leaked update-key artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          ids="$(gh api --paginate "repos/${{ github.repository }}/actions/artifacts?per_page=100" --jq '.artifacts[] | select(.name == "update-key" or (.name | endswith(".priv"))) | .id')"
+          for id in $ids; do
+            echo "deleting artifact $id"
+            gh api --method DELETE "repos/${{ github.repository }}/actions/artifacts/$id"
+          done
+          left="$(gh api --paginate "repos/${{ github.repository }}/actions/artifacts?per_page=100" --jq '[.artifacts[] | select(.name == "update-key" or (.name | endswith(".priv")))] | length')"
+          echo "remaining leaked artifacts: $left"
+          test "$left" = "0"
 
   server:
-    needs: update-key
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -51,10 +50,6 @@ jobs:
         if: matrix.goos == 'linux' && matrix.goarch == 'amd64'
         working-directory: server
         run: go test ./...
-      - uses: actions/download-artifact@v4
-        with:
-          name: update-key
-          path: keys
       - name: Build server
         working-directory: server
         env:
@@ -65,7 +60,7 @@ jobs:
           ext=""
           if [ "$GOOS" = "windows" ]; then ext=".exe"; fi
           mkdir -p ../dist
-          pub="$(tr -d ' \n\r' < ../keys/update.pub)"
+          pub="$(tr -d ' \n\r' < ../packaging/sms-update.pub)"
           go build -trimpath -ldflags "-s -w -X schooldesk/internal/update.PublicKeyBase64=${pub}" -o "../dist/schooldesk-server-${GOOS}-${GOARCH}${ext}" ./cmd/schooldesk-server
       - name: Raspberry Pi package
         if: matrix.goos == 'linux' && matrix.goarch == 'arm64'
@@ -140,7 +135,6 @@ jobs:
           if-no-files-found: error
 
   windows-app:
-    needs: update-key
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -153,17 +147,13 @@ jobs:
       - name: Build Windows desktop app
         working-directory: app
         run: flutter build windows --release
-      - uses: actions/download-artifact@v4
-        with:
-          name: update-key
-          path: keys
       - name: Build Windows server
         working-directory: server
         shell: pwsh
         run: |
           $env:CGO_ENABLED = "0"
           New-Item -ItemType Directory -Force -Path ..\dist | Out-Null
-          $pub = (Get-Content ..\keys\update.pub -Raw).Trim()
+          $pub = (Get-Content ..\packaging\sms-update.pub -Raw).Trim()
           go build -trimpath -ldflags "-s -w -X schooldesk/internal/update.PublicKeyBase64=$pub" -o ..\dist\schooldesk-server-windows-amd64.exe .\cmd\schooldesk-server
       - name: Stage app files
         shell: pwsh
@@ -263,7 +253,6 @@ jobs:
           if-no-files-found: error
 
   macos-app:
-    needs: update-key
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
@@ -277,16 +266,12 @@ jobs:
       - name: Build macOS desktop app
         working-directory: app
         run: flutter build macos --release
-      - uses: actions/download-artifact@v4
-        with:
-          name: update-key
-          path: keys
       - name: Build universal server
         working-directory: server
         run: |
           set -euo pipefail
           mkdir -p ../dist
-          pub="$(tr -d ' \n\r' < ../keys/update.pub)"
+          pub="$(tr -d ' \n\r' < ../packaging/sms-update.pub)"
           ld="-s -w -X schooldesk/internal/update.PublicKeyBase64=${pub}"
           CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -trimpath -ldflags "$ld" -o ../dist/schooldesk-server-darwin-arm64 ./cmd/schooldesk-server
           CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -trimpath -ldflags "$ld" -o ../dist/schooldesk-server-darwin-amd64 ./cmd/schooldesk-server
@@ -446,6 +431,7 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
+          flutter-version: "3.50.1"
       - name: App screens
         working-directory: app
         run: |
@@ -478,9 +464,20 @@ jobs:
           path: dist/screenshots/*.png
           if-no-files-found: error
 
+  no-private-keys:
+    needs: [server, android, windows-app, macos-app, macos-demo, screenshots]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: all-artifacts
+      - name: Fail if an artifact contains a private key
+        run: python3 tools/reject_private_keys.py all-artifacts
+
   release-sms:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: [server, android, windows-app, screenshots]
+    needs: [server, android, windows-app, screenshots, no-private-keys]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -511,17 +508,10 @@ jobs:
         with:
           name: windows-client-installer
           path: win-client
-      - uses: actions/download-artifact@v4
-        with:
-          name: update-key
-          path: keys
-      - uses: actions/download-artifact@v4
-        with:
-          name: screenshots
-          path: screenshots
-      - name: Sign a sample update and publish sms-v1
+      - name: Publish sms-v1 without a private key
         env:
           GH_TOKEN: ${{ github.token }}
+          SMS_UPDATE_SIGNING_KEY: ${{ secrets.SMS_UPDATE_SIGNING_KEY }}
         run: |
           set -euo pipefail
           mkdir -p payload dist
@@ -535,29 +525,59 @@ jobs:
           test -s payload/server-windows-amd64.exe
           test -s payload/client.apk
           test -s payload/client-windows.exe
-          (cd server && go run ./cmd/updatekey -key "$GITHUB_WORKSPACE/keys/update.priv" -dir "$GITHUB_WORKSPACE/payload" -version sms-v1 -schema 2 -out "$GITHUB_WORKSPACE/dist/shamm-update-sms-v1.smsu")
-          cp keys/update.pub dist/update.pub
+          signed=0
+          if [ -n "${SMS_UPDATE_SIGNING_KEY}" ]; then
+            umask 077
+            keyfile="$RUNNER_TEMP/update.priv"
+            printf '%s' "$SMS_UPDATE_SIGNING_KEY" > "$keyfile"
+            (cd server && go run ./cmd/updatekey -key "$keyfile" -dir "$GITHUB_WORKSPACE/payload" -version sms-v1 -schema 2 -out "$GITHUB_WORKSPACE/dist/shamm-update-sms-v1.smsu")
+            rm -f "$keyfile"
+            signed=1
+          else
+            echo "SMS_UPDATE_SIGNING_KEY is not set. This build does not sign or upload a sample bundle."
+          fi
           find win-server -name 'ShammSchool-Server-Setup.exe' -exec cp {} dist/ \;
           find win-client -name 'ShammSchool-Client-Setup.exe' -exec cp {} dist/ \;
           find apk -name 'app-release.apk' -exec cp {} dist/ \;
           find pi -name 'shamm-school-server_1.0.0_arm64.deb' -exec cp {} dist/ \;
           find pi -name 'pi-setup.sh' -exec cp {} dist/ \;
           find pi -name 'schooldesk-server-linux-arm64' -exec cp {} dist/ \;
+          python3 tools/reject_private_keys.py dist
           files=(
             dist/ShammSchool-Server-Setup.exe
             dist/ShammSchool-Client-Setup.exe
             dist/app-release.apk
-            dist/shamm-update-sms-v1.smsu
-            dist/update.pub
           )
+          if [ "$signed" = "1" ]; then files+=(dist/shamm-update-sms-v1.smsu); fi
           if [ -f dist/shamm-school-server_1.0.0_arm64.deb ]; then files+=(dist/shamm-school-server_1.0.0_arm64.deb); fi
           if [ -f dist/pi-setup.sh ]; then files+=(dist/pi-setup.sh); fi
           if [ -f dist/schooldesk-server-linux-arm64 ]; then files+=(dist/schooldesk-server-linux-arm64); fi
-          notes=$'Shamm School Management Systems.\n\nThe sample update is signed with the test key in update.pub. Make your own key before a real school uses updates. See docs/SETUP.md.'
+          notes=$'Shamm School Management Systems.\n\nThe programs trust the public key in packaging/sms-update.pub. This release does not include a private key.'
+          if [ "$signed" != "1" ]; then
+            notes+=$'\n\nNo sample update bundle is attached, because SMS_UPDATE_SIGNING_KEY is not set.'
+          fi
           if gh release view sms-v1 --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            ids="$(gh api "repos/${{ github.repository }}/releases/tags/sms-v1" --jq '.assets[] | select(.name == "update.pub" or .name == "shamm-update-sms-v1.smsu" or (.name | endswith(".priv"))) | .id')"
+            for id in $ids; do
+              echo "removing release asset $id"
+              gh api --method DELETE "repos/${{ github.repository }}/releases/assets/$id"
+            done
             gh release upload sms-v1 "${files[@]}" --repo "${{ github.repository }}" --clobber
+            gh release edit sms-v1 --repo "${{ github.repository }}" --notes "$notes"
           else
             gh release create sms-v1 "${files[@]}" --repo "${{ github.repository }}" --title "Shamm School Management Systems" --notes "$notes"
+          fi
+          rm -rf "$RUNNER_TEMP/release-scan"
+          mkdir -p "$RUNNER_TEMP/release-scan"
+          gh release download sms-v1 --dir "$RUNNER_TEMP/release-scan" --repo "${{ github.repository }}"
+          python3 tools/reject_private_keys.py "$RUNNER_TEMP/release-scan"
+          if find "$RUNNER_TEMP/release-scan" -name 'update.pub' -o -name '*.priv' | grep -q .; then
+            echo "the release still has a key file"
+            exit 1
+          fi
+          if [ "$signed" != "1" ] && find "$RUNNER_TEMP/release-scan" -name '*.smsu' | grep -q .; then
+            echo "a sample bundle was published without the signing secret"
+            exit 1
           fi
 
   release-demo:

@@ -23,9 +23,10 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-// PublicKeyBase64 is the raw ed25519 public key, set at build time with -X.
-// An empty value means this build will not accept an update bundle.
-var PublicKeyBase64 = ""
+// PublicKeyBase64 is the raw ed25519 public key shipped with this program.
+// It matches packaging/sms-update.pub. A build may replace it with -X.
+// The private key is never stored in this repository.
+var PublicKeyBase64 = "mvzhU5gYMPORkoi9HC2K4gN5omcPkdlL9eriRYjdPAM="
 
 const Product = "shamm-school"
 

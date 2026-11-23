@@ -93,15 +93,17 @@ Days and periods start at Monday period 1 on the screen. The file stores them st
 
 ## 8. Update from a USB stick
 
-The person who prepares the update keeps the private key. It is not in this project.
+The person who prepares the update keeps the private key. It is not in this project, and the build never uploads it.
+
+The public key that every school copy trusts is `packaging/sms-update.pub`. It is also built into the server. The matching private key stays with the owner. To let GitHub Actions sign a sample bundle, set the repository secret `SMS_UPDATE_SIGNING_KEY` to that private key. If the secret is missing, the build publishes the programs and does not publish a bundle.
 
 On the computer that prepares the update:
 
-1. Run `go run ./server/cmd/updatekey -gen /path/to/keys` once. This writes `update.priv` and `update.pub`.
-2. Keep `update.priv` somewhere safe. Do not put it in git.
+1. Use the private key you were given. Do not generate another key unless you also rebuild every school server with the new public key.
+2. Keep the private key somewhere safe. Do not put it in git, and do not upload it as a build artifact.
 3. Put the new program files in one folder. The names are `server-windows-amd64.exe`, `server-linux-arm64`, `server-linux-amd64`, `client.apk`, and `client-windows.exe`.
 4. Run `go run ./server/cmd/updatekey -key /path/to/keys/update.priv -dir that-folder -version sms-v2 -schema 2 -out shamm-update.smsu`.
-5. Copy `shamm-update.smsu` to a USB stick.
+5. Copy `shamm-update.smsu` to a USB stick. Copy the bundle only. Do not copy the private key.
 
 On the school computer:
 
@@ -115,4 +117,4 @@ If the new program does not start, the previous program is put back. The school 
 
 ## 9. What the sample release is for
 
-The files on the `sms-v1` release are for trying the program. They trust a test key made by the build. Before a real school uses updates, make your own key with the command in step 8 and build the server with that public key.
+The files on the `sms-v1` release are for trying the program. They trust the public key in `packaging/sms-update.pub`. The release does not include a private key. A sample bundle is attached only when the `SMS_UPDATE_SIGNING_KEY` secret is set.
