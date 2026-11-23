@@ -3,8 +3,10 @@
 package license
 
 import (
+	"context"
 	"os/exec"
 	"strings"
+	"time"
 )
 
 // Collect reads the Mac identity parts.
@@ -17,7 +19,7 @@ func Collect() (Parts, error) {
 }
 
 func ioregField(key string) string {
-	out, err := exec.Command("ioreg", "-rd1", "-c", "IOPlatformExpertDevice").Output()
+	out, err := runLimited(3*time.Second, "ioreg", "-rd1", "-c", "IOPlatformExpertDevice")
 	if err != nil {
 		return ""
 	}
@@ -36,7 +38,7 @@ func ioregField(key string) string {
 }
 
 func diskUUID() string {
-	out, err := exec.Command("diskutil", "info", "disk0").Output()
+	out, err := runLimited(3*time.Second, "diskutil", "info", "disk0")
 	if err != nil {
 		return ""
 	}
@@ -51,4 +53,10 @@ func diskUUID() string {
 		return strings.TrimSpace(parts[1])
 	}
 	return ""
+}
+
+func runLimited(limit time.Duration, name string, args ...string) ([]byte, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), limit)
+	defer cancel()
+	return exec.CommandContext(ctx, name, args...).Output()
 }
