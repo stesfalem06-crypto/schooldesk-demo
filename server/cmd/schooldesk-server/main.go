@@ -84,6 +84,14 @@ func serve(serviceStop <-chan struct{}) {
 	}}
 	go prepareSchool(st, api, *data)
 
+	server := &http.Server{Addr: *addr, Handler: api.Handler(), ReadHeaderTimeout: 10 * time.Second}
+	go func() {
+		log.Printf("%s is on %s", brand.Product, *addr)
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatal(err)
+		}
+	}()
+
 	port := portOf(*addr)
 	var stopAnnounce func()
 	if !*noMDNS && port > 0 {
@@ -131,13 +139,6 @@ func serve(serviceStop <-chan struct{}) {
 		return make(chan struct{})
 	}())
 
-	server := &http.Server{Addr: *addr, Handler: api.Handler(), ReadHeaderTimeout: 10 * time.Second}
-	go func() {
-		log.Printf("%s is on %s", brand.Product, *addr)
-		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatal(err)
-		}
-	}()
 	ch := make(chan os.Signal, 1)
 	signal.Notify(ch, syscall.SIGINT, syscall.SIGTERM)
 	select {
