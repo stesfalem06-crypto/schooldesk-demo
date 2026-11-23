@@ -26,7 +26,8 @@ jobs:
             echo "deleting artifact $id"
             gh api --method DELETE "repos/${{ github.repository }}/actions/artifacts/$id"
           done
-          left="$(gh api --paginate "repos/${{ github.repository }}/actions/artifacts?per_page=100" --jq '[.artifacts[] | select(.name == "update-key" or (.name | endswith(".priv")))] | length')"
+          # --paginate runs jq once per page, so count the ids instead of summing page lengths.
+          left="$(gh api --paginate "repos/${{ github.repository }}/actions/artifacts?per_page=100" --jq '.artifacts[] | select(.name == "update-key" or (.name | endswith(".priv"))) | .id' | grep -c . || true)"
           echo "remaining leaked artifacts: $left"
           test "$left" = "0"
 
