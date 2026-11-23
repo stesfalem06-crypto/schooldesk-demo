@@ -4,26 +4,32 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import androidx.core.content.FileProvider
-import com.journeyapps.barcodescanner.IntentIntegrator
-import io.flutter.embedding.android.FlutterActivity
+import com.journeyapps.barcodescanner.ScanContract
+import com.journeyapps.barcodescanner.ScanOptions
+import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 import java.io.File
 
-class MainActivity : FlutterActivity() {
+class MainActivity : FlutterFragmentActivity() {
     private var scanResult: MethodChannel.Result? = null
+    private val scan = registerForActivityResult(ScanContract()) { result ->
+        val pending = scanResult
+        scanResult = null
+        pending?.success(result.contents ?: "")
+    }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "school/scan").setMethodCallHandler { call, result ->
             if (call.method == "scan") {
                 scanResult = result
-                val integrator = IntentIntegrator(this)
-                integrator.setDesiredBarcodeFormats(IntentIntegrator.QR_CODE)
-                integrator.setPrompt("Point at the picture on the school computer")
-                integrator.setBeepEnabled(false)
-                integrator.setOrientationLocked(false)
-                integrator.initiateScan()
+                val options = ScanOptions()
+                options.setDesiredBarcodeFormats(ScanOptions.QR_CODE)
+                options.setPrompt("Point at the picture on the school computer")
+                options.setBeepEnabled(false)
+                options.setOrientationLocked(false)
+                scan.launch(options)
             } else {
                 result.notImplemented()
             }
@@ -48,16 +54,6 @@ class MainActivity : FlutterActivity() {
             }
             startActivity(intent)
             result.success(true)
-        }
-    }
-
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        val parsed = IntentIntegrator.parseActivityResult(requestCode, resultCode, data)
-        if (parsed != null) {
-            scanResult?.success(parsed.contents ?: "")
-            scanResult = null
-        } else {
-            super.onActivityResult(requestCode, resultCode, data)
         }
     }
 }
