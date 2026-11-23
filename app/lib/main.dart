@@ -5,7 +5,9 @@ import 'package:material_ui/material_ui.dart';
 import 'package:provider/provider.dart';
 
 import 'app_state.dart';
+import 'call_live.dart';
 import 'edition.dart';
+import 'shamm_ui.dart';
 import 'local_server.dart';
 import 'erp_home.dart';
 import 'role_screen.dart';
@@ -33,6 +35,7 @@ Future<void> main() async {
       return StartupProblem(message: 'Something went wrong while drawing this screen.\n$line', onRetry: () {});
     };
   }
+  if (!demoEdition) startCall = openLiveCall;
   runApp(const RepaintBoundary(child: StartupApp()));
 }
 
@@ -154,7 +157,7 @@ class SchoolApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: demoEdition ? 'SchoolDesk Demo' : 'SchoolDesk',
+      title: demoEdition ? 'SchoolDesk Demo' : productName,
       debugShowCheckedModeBanner: false,
       theme: schoolTheme(),
       home: const Gate(),

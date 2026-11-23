@@ -10,10 +10,11 @@ import 'startup_log.dart';
 import 'theme.dart';
 
 class ErpShell extends StatefulWidget {
-  const ErpShell({super.key, required this.items, required this.index, required this.onSelect, required this.child});
+  const ErpShell({super.key, required this.items, required this.index, required this.generation, required this.onSelect, required this.child});
 
   final List<DeskItem> items;
   final int index;
+  final int generation;
   final ValueChanged<int> onSelect;
   final Widget child;
 
@@ -38,6 +39,7 @@ class ErpShellState extends State<ErpShell> {
   GlobalKey<NavigatorState> _navKey = GlobalKey<NavigatorState>();
   late final _TrailObserver _observer = _TrailObserver(this);
   int _navFor = -1;
+  int _gen = -1;
   List<String> _crumbs = [];
   String? _navLabel;
 
@@ -92,8 +94,9 @@ class ErpShellState extends State<ErpShell> {
 
   @override
   Widget build(BuildContext context) {
-    if (_navFor != widget.index) {
+    if (_navFor != widget.index || _gen != widget.generation) {
       _navFor = widget.index;
+      _gen = widget.generation;
       _navKey = GlobalKey<NavigatorState>();
     }
     final model = context.watch<AppModel>();
@@ -145,6 +148,16 @@ class _Top extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(20, 10, 12, 10),
         child: Column(children: [
           Row(children: [
+          IconButton(
+            tooltip: 'Back',
+            onPressed: DeskHost.of(context)?.canBack == true ? () => DeskHost.of(context)!.back() : null,
+            icon: const Icon(Icons.arrow_back),
+          ),
+          IconButton(
+            tooltip: 'Forward',
+            onPressed: DeskHost.of(context)?.canForward == true ? () => DeskHost.of(context)!.forward() : null,
+            icon: const Icon(Icons.arrow_forward),
+          ),
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text(model.school.isEmpty ? 'Hope Academy' : model.school, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: ink)),
@@ -194,7 +207,7 @@ class _Side extends StatelessWidget {
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         const Padding(
           padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
-          child: Text('SchoolDesk', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: navy)),
+          child: Text('Shamm School', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: navy)),
         ),
         Expanded(
           child: ListView(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), children: [

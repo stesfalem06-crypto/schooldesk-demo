@@ -226,7 +226,7 @@ func Preview(s *store.Store) error {
 			return err
 		}
 	}
-	return nil
+	return SetSamplePINs(s)
 }
 
 func saveTeacher(s *store.Store, name, sex, village, idNumber, employee, phone, born, field, qualification string) (store.Staff, error) {

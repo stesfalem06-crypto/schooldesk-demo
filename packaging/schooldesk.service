@@ -1,5 +1,5 @@
 [Unit]
-Description=SchoolDesk school server
+Description=Shamm School Management Systems
 After=network.target
 
 [Service]

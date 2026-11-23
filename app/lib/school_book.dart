@@ -1081,7 +1081,7 @@ class SchoolBook {
       'Students ${_pupils().length}',
       'Fees in ${finance['fees_collected']} still to pay ${finance['fees_remaining']}',
       'Balance ${finance['balance']}',
-      'Developed by 9 Multimedia and IT Solutions · SHAMM TESFALEM · 07162947',
+      '9 Multimedia and IT solutions · SHAMM TESFALEM · 07162947',
     ];
   }
 

@@ -52,9 +52,57 @@ func (s *Store) Close() error {
 
 func (s *Store) Path() string { return s.path }
 
+func (s *Store) DBCount(query string, dest *int) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.db.QueryRow(query).Scan(dest)
+}
+
 func (s *Store) migrate() error {
-	_, err := s.db.Exec(schema)
+	if _, err := s.db.Exec(schema); err != nil {
+		return err
+	}
+	if !s.hasColumn("users", "pin_hash") {
+		if _, err := s.db.Exec(`ALTER TABLE users ADD COLUMN pin_hash TEXT NOT NULL DEFAULT ''`); err != nil {
+			return err
+		}
+	}
+	_, err := s.db.Exec(`INSERT INTO settings (key, value) VALUES ('schema_version', '1') ON CONFLICT(key) DO NOTHING`)
 	return err
+}
+
+func (s *Store) hasColumn(table, column string) bool {
+	rows, err := s.db.Query(`PRAGMA table_info(` + table + `)`)
+	if err != nil {
+		return false
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var cid int
+		var name, ctype string
+		var notnull, pk int
+		var dflt sql.NullString
+		if rows.Scan(&cid, &name, &ctype, &notnull, &dflt, &pk) == nil && name == column {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *Store) SchemaVersion() (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var v string
+	err := s.db.QueryRow(`SELECT value FROM settings WHERE key = 'schema_version'`).Scan(&v)
+	if err != nil {
+		return 1, nil
+	}
+	n := 1
+	fmt.Sscanf(v, "%d", &n)
+	if n < 1 {
+		n = 1
+	}
+	return n, nil
 }
 
 func NewID() string {
@@ -125,6 +173,7 @@ CREATE TABLE IF NOT EXISTS users (
   id TEXT PRIMARY KEY,
   username TEXT NOT NULL COLLATE NOCASE UNIQUE,
   password_hash TEXT NOT NULL,
+  pin_hash TEXT NOT NULL DEFAULT '',
   role TEXT NOT NULL CHECK (role IN ('teacher','admin','director')),
   staff_id TEXT NOT NULL DEFAULT '',
   display_name TEXT NOT NULL,
@@ -395,6 +444,33 @@ CREATE TABLE IF NOT EXISTS audit (
   user_id TEXT NOT NULL DEFAULT '',
   action TEXT NOT NULL,
   detail TEXT NOT NULL DEFAULT ''
+);
+CREATE TABLE IF NOT EXISTS messages (
+  id TEXT PRIMARY KEY,
+  from_user TEXT NOT NULL,
+  to_user TEXT NOT NULL,
+  body TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_messages_pair ON messages(from_user, to_user, created_at);
+CREATE TABLE IF NOT EXISTS student_attendance (
+  id TEXT PRIMARY KEY,
+  class_id TEXT NOT NULL,
+  student_id TEXT NOT NULL,
+  roll_number INTEGER NOT NULL DEFAULT 0,
+  day TEXT NOT NULL,
+  status TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  source_id TEXT NOT NULL DEFAULT '',
+  updated_by TEXT NOT NULL DEFAULT '',
+  UNIQUE (student_id, day)
+);
+CREATE TABLE IF NOT EXISTS update_log (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  at TEXT NOT NULL,
+  from_version INTEGER NOT NULL,
+  to_version INTEGER NOT NULL,
+  note TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_students_class ON students(class_id);
 CREATE INDEX IF NOT EXISTS idx_scores_assessment ON scores(assessment_id);

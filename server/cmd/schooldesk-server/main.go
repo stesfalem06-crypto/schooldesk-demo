@@ -1,6 +1,9 @@
 package main
 
 import (
+	"crypto/ed25519"
+	"encoding/base64"
+	"errors"
 	"flag"
 	"log"
 	"net"
@@ -9,20 +12,52 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
+	"schooldesk/internal/brand"
 	"schooldesk/internal/discover"
 	"schooldesk/internal/httpapi"
 	"schooldesk/internal/license"
 	"schooldesk/internal/store"
+	"schooldesk/internal/update"
+	"schooldesk/internal/winsvc"
 )
 
 func main() {
-	data := flag.String("data", "data", "folder for the school records")
-	addr := flag.String("addr", ":8741", "address to listen on")
-	noMDNS := flag.Bool("no-mdns", false, "do not announce the server on the school network")
-	flag.Parse()
+	if len(os.Args) > 1 && os.Args[1] == "--install-service" {
+		dataDir := filepath.Join(os.Getenv("ProgramData"), "ShammSchool")
+		for i := 2; i < len(os.Args)-1; i++ {
+			if os.Args[i] == "--data" {
+				dataDir = os.Args[i+1]
+			}
+		}
+		exe, err := os.Executable()
+		if err != nil {
+			log.Fatal(err)
+		}
+		if err := winsvc.Install(exe, dataDir); err != nil {
+			log.Fatal(err)
+		}
+		log.Print("The school service is installed")
+		return
+	}
+	if winsvc.Running() {
+		if err := winsvc.Run(func(stop <-chan struct{}) { serve(stop) }); err != nil {
+			log.Fatal(err)
+		}
+		return
+	}
+	serve(nil)
+}
+
+func serve(serviceStop <-chan struct{}) {
+	flags := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
+	data := flags.String("data", "data", "folder for the school records")
+	addr := flags.String("addr", ":8741", "address to listen on")
+	noMDNS := flags.Bool("no-mdns", false, "do not announce the server on the school network")
+	_ = flags.Parse(os.Args[1:])
 
 	if err := os.MkdirAll(*data, 0o700); err != nil {
 		log.Fatal(err)
@@ -55,15 +90,25 @@ func main() {
 	if err := license.PublicKeyCheck(); err != nil {
 		log.Fatal(err)
 	}
-	api := &httpapi.API{Store: st, Gate: gate}
+	exe, _ := os.Executable()
+	api := &httpapi.API{Store: st, Gate: gate, DataDir: *data, Binary: exe, OnRestart: func() {
+		log.Print("Restarting after an update")
+		os.Exit(0)
+	}}
 	api.MaybeAutoSemester()
 
 	port := portOf(*addr)
-	var stop func()
+	var stopAnnounce func()
 	if !*noMDNS && port > 0 {
-		stop, err = discover.Announce(port)
+		stopAnnounce, err = discover.Announce(port)
 		if err != nil {
 			log.Print("The school network name could not be announced. Computers can still use the address.")
+		}
+		stopUDP, udpErr := discover.ServeUDP(port)
+		if udpErr != nil {
+			log.Print("The school address beacon could not start. Computers can still use the address.")
+		} else {
+			defer stopUDP()
 		}
 	}
 	go nightly(api)
@@ -74,21 +119,72 @@ func main() {
 			api.MaybeAutoSemester()
 		}
 	}()
+	go update.Watch(update.DefaultDisks(), func(path string) error {
+		body, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		key, err := apiUpdateKey(*data)
+		if err != nil {
+			log.Print(err)
+			return err
+		}
+		_, err = update.Apply(body, update.ApplyConfig{PublicKey: key, DataDir: *data, BinaryPath: exe})
+		if err != nil {
+			log.Print(err)
+			return err
+		}
+		log.Print("Update from a plugged-in disk is ready. Restarting.")
+		os.Exit(0)
+		return nil
+	}, func() <-chan struct{} {
+		if serviceStop != nil {
+			return serviceStop
+		}
+		return make(chan struct{})
+	}())
 
 	server := &http.Server{Addr: *addr, Handler: api.Handler(), ReadHeaderTimeout: 10 * time.Second}
 	go func() {
-		log.Printf("SchoolDesk is on %s", *addr)
+		log.Printf("%s is on %s", brand.Product, *addr)
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatal(err)
 		}
 	}()
 	ch := make(chan os.Signal, 1)
 	signal.Notify(ch, syscall.SIGINT, syscall.SIGTERM)
-	<-ch
-	if stop != nil {
-		stop()
+	select {
+	case <-ch:
+	case <-serviceStopOrNever(serviceStop):
+	}
+	if stopAnnounce != nil {
+		stopAnnounce()
 	}
 	_ = server.Close()
+}
+
+func serviceStopOrNever(stop <-chan struct{}) <-chan struct{} {
+	if stop != nil {
+		return stop
+	}
+	return make(chan struct{})
+}
+
+func apiUpdateKey(data string) (ed25519.PublicKey, error) {
+	if raw, err := os.ReadFile(filepath.Join(data, "update.pub")); err == nil {
+		if key, err := decodePub(string(raw)); err == nil {
+			return key, nil
+		}
+	}
+	return update.EmbeddedKey()
+}
+
+func decodePub(s string) (ed25519.PublicKey, error) {
+	raw, err := base64.StdEncoding.DecodeString(strings.TrimSpace(s))
+	if err != nil || len(raw) != ed25519.PublicKeySize {
+		return nil, errors.New("the update key file is not valid")
+	}
+	return ed25519.PublicKey(raw), nil
 }
 
 func nightly(api *httpapi.API) {
@@ -131,14 +227,16 @@ func (g fileGate) Activate(code string, now time.Time) (license.Status, error) {
 	return license.Activate(g.path, g.parts, code, now)
 }
 
-const firstLogin = `SchoolDesk sample sign-in
+const firstLogin = `Shamm School Management Systems
+Sample sign-in. Pick your name, then type the 4-digit number.
 
-admin      admin1850
-director   director1850
-hanna      hanna1850
-samuel     samuel1850
-meron      meron1850
-dawit      dawit1850
+admin      1850
+director   1851
+hanna      1852
+samuel     1853
+meron      1854
+dawit      1855
 
+The old passwords (name plus 1850) still work for the admin.
 Change these after the school is set up.
 `

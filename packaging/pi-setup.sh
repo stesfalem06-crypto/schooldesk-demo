@@ -1,5 +1,5 @@
 #!/bin/sh
-# Sets up SchoolDesk on a Raspberry Pi (64-bit Raspberry Pi OS).
+# Sets up Shamm School Management Systems on a Raspberry Pi (64-bit).
 # Copy schooldesk-server-linux-arm64 next to this script, then:
 #   sudo sh pi-setup.sh
 set -eu
@@ -18,11 +18,15 @@ id schooldesk >/dev/null 2>&1 || useradd --system --home /var/lib/schooldesk --s
 install -d -o schooldesk -g schooldesk -m 0750 /var/lib/schooldesk /opt/schooldesk
 install -o root -g root -m 0755 "$BIN" /opt/schooldesk/schooldesk-server
 install -o root -g root -m 0644 "$SRC/schooldesk.service" /etc/systemd/system/schooldesk.service
+if command -v ufw >/dev/null 2>&1; then
+  ufw allow 8741/tcp >/dev/null 2>&1 || true
+  ufw allow 8742/udp >/dev/null 2>&1 || true
+fi
 systemctl daemon-reload
 systemctl enable --now schooldesk.service
 echo
-echo "SchoolDesk is running on port 8741."
-echo "Open http://THIS-PI-ADDRESS:8741 on the school network to see the unlock screen."
+echo "Shamm School Management Systems is running on port 8741."
+echo "Open http://THIS-PI-ADDRESS:8741 on the school network to see the status page."
 echo "Sign-in names for the sample school are in /var/lib/schooldesk/FIRST_LOGIN.txt"
 echo
 echo "Night backups go to the folder set in Settings."

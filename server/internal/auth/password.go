@@ -20,12 +20,30 @@ const (
 )
 
 var ErrPassword = errors.New("use 6 to 72 characters")
+var ErrPIN = errors.New("the PIN is 4 numbers")
 
 // Hash stores a password with argon2id.
 func Hash(password string) (string, error) {
 	if len(password) < 6 || len(password) > 72 {
 		return "", ErrPassword
 	}
+	return hashSecret(password)
+}
+
+// HashPIN stores a 4-digit PIN with the same argon2id settings.
+func HashPIN(pin string) (string, error) {
+	if len(pin) != 4 {
+		return "", ErrPIN
+	}
+	for _, c := range pin {
+		if c < '0' || c > '9' {
+			return "", ErrPIN
+		}
+	}
+	return hashSecret(pin)
+}
+
+func hashSecret(password string) (string, error) {
 	salt := make([]byte, 16)
 	if _, err := rand.Read(salt); err != nil {
 		return "", err

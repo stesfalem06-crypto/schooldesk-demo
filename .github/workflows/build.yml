@@ -2,6 +2,7 @@ name: Build
 
 on:
   workflow_dispatch:
+  pull_request:
   push:
     branches: [main]
 
@@ -9,8 +10,28 @@ permissions:
   contents: read
 
 jobs:
+  update-key:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+          cache-dependency-path: server/go.sum
+      - name: Make a test update key
+        working-directory: server
+        run: go run ./cmd/updatekey -gen "$RUNNER_TEMP/shamm-keys"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: update-key
+          retention-days: 1
+          path: |
+            ${{ runner.temp }}/shamm-keys/update.pub
+            ${{ runner.temp }}/shamm-keys/update.priv
+          if-no-files-found: error
+
   server:
-    if: ${{ !endsWith(github.repository, '/schooldesk-demo') }}
+    needs: update-key
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -30,6 +51,10 @@ jobs:
         if: matrix.goos == 'linux' && matrix.goarch == 'amd64'
         working-directory: server
         run: go test ./...
+      - uses: actions/download-artifact@v4
+        with:
+          name: update-key
+          path: keys
       - name: Build server
         working-directory: server
         env:
@@ -40,7 +65,11 @@ jobs:
           ext=""
           if [ "$GOOS" = "windows" ]; then ext=".exe"; fi
           mkdir -p ../dist
-          go build -trimpath -ldflags "-s -w" -o "../dist/schooldesk-server-${GOOS}-${GOARCH}${ext}" ./cmd/schooldesk-server
+          pub="$(tr -d ' \n\r' < ../keys/update.pub)"
+          go build -trimpath -ldflags "-s -w -X schooldesk/internal/update.PublicKeyBase64=${pub}" -o "../dist/schooldesk-server-${GOOS}-${GOARCH}${ext}" ./cmd/schooldesk-server
+      - name: Raspberry Pi package
+        if: matrix.goos == 'linux' && matrix.goarch == 'arm64'
+        run: sh packaging/build-deb.sh dist/schooldesk-server-linux-arm64
       - uses: actions/upload-artifact@v4
         with:
           name: server-${{ matrix.goos }}-${{ matrix.goarch }}
@@ -53,11 +82,11 @@ jobs:
           name: pi-server
           path: |
             dist/schooldesk-server-linux-arm64
+            dist/shamm-school-server_1.0.0_arm64.deb
             packaging/pi-setup.sh
           if-no-files-found: error
 
   android:
-    if: ${{ !endsWith(github.repository, '/schooldesk-demo') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -111,7 +140,7 @@ jobs:
           if-no-files-found: error
 
   windows-app:
-    if: ${{ !endsWith(github.repository, '/schooldesk-demo') }}
+    needs: update-key
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -124,13 +153,18 @@ jobs:
       - name: Build Windows desktop app
         working-directory: app
         run: flutter build windows --release
+      - uses: actions/download-artifact@v4
+        with:
+          name: update-key
+          path: keys
       - name: Build Windows server
         working-directory: server
         shell: pwsh
         run: |
           $env:CGO_ENABLED = "0"
           New-Item -ItemType Directory -Force -Path ..\dist | Out-Null
-          go build -trimpath -ldflags "-s -w" -o ..\dist\schooldesk-server-windows-amd64.exe .\cmd\schooldesk-server
+          $pub = (Get-Content ..\keys\update.pub -Raw).Trim()
+          go build -trimpath -ldflags "-s -w -X schooldesk/internal/update.PublicKeyBase64=$pub" -o ..\dist\schooldesk-server-windows-amd64.exe .\cmd\schooldesk-server
       - name: Stage app files
         shell: pwsh
         run: |
@@ -213,15 +247,23 @@ jobs:
           Write-Host "Using $iscc"
           & $iscc packaging\SchoolDesk.iss
           if ($LASTEXITCODE -ne 0) { throw "ISCC failed with $LASTEXITCODE" }
-          if (-not (Test-Path dist\SchoolDesk-Setup.exe)) { throw "SchoolDesk-Setup.exe was not written" }
+          & $iscc packaging\ShammClient.iss
+          if ($LASTEXITCODE -ne 0) { throw "client ISCC failed with $LASTEXITCODE" }
+          if (-not (Test-Path dist\ShammSchool-Server-Setup.exe)) { throw "ShammSchool-Server-Setup.exe was not written" }
+          if (-not (Test-Path dist\ShammSchool-Client-Setup.exe)) { throw "ShammSchool-Client-Setup.exe was not written" }
       - uses: actions/upload-artifact@v4
         with:
-          name: windows-installer
-          path: dist/SchoolDesk-Setup.exe
+          name: windows-server-installer
+          path: dist/ShammSchool-Server-Setup.exe
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-client-installer
+          path: dist/ShammSchool-Client-Setup.exe
           if-no-files-found: error
 
   macos-app:
-    if: ${{ !endsWith(github.repository, '/schooldesk-demo') }}
+    needs: update-key
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
@@ -235,13 +277,19 @@ jobs:
       - name: Build macOS desktop app
         working-directory: app
         run: flutter build macos --release
+      - uses: actions/download-artifact@v4
+        with:
+          name: update-key
+          path: keys
       - name: Build universal server
         working-directory: server
         run: |
           set -euo pipefail
           mkdir -p ../dist
-          CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -trimpath -ldflags "-s -w" -o ../dist/schooldesk-server-darwin-arm64 ./cmd/schooldesk-server
-          CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -trimpath -ldflags "-s -w" -o ../dist/schooldesk-server-darwin-amd64 ./cmd/schooldesk-server
+          pub="$(tr -d ' \n\r' < ../keys/update.pub)"
+          ld="-s -w -X schooldesk/internal/update.PublicKeyBase64=${pub}"
+          CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -trimpath -ldflags "$ld" -o ../dist/schooldesk-server-darwin-arm64 ./cmd/schooldesk-server
+          CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -trimpath -ldflags "$ld" -o ../dist/schooldesk-server-darwin-amd64 ./cmd/schooldesk-server
           lipo -create -output ../dist/schooldesk-server-darwin ../dist/schooldesk-server-darwin-arm64 ../dist/schooldesk-server-darwin-amd64
           lipo -info ../dist/schooldesk-server-darwin
       - name: Bundle server and make disk image
@@ -387,8 +435,133 @@ jobs:
             dist/gatekeeper.txt
             dist/startup.log
 
+  screenshots:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+          cache-dependency-path: server/go.sum
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - name: App screens
+        working-directory: app
+        run: |
+          flutter test test/shamm_shots_test.dart
+          mkdir -p "$GITHUB_WORKSPACE/dist/screenshots"
+          cp test/goldens/shamm-*.png "$GITHUB_WORKSPACE/dist/screenshots/"
+      - uses: browser-actions/setup-chrome@v1
+      - name: Server status page
+        run: |
+          set -euo pipefail
+          mkdir -p dist/screenshots /tmp/shamm-data
+          (cd server && go build -o /tmp/shamm-server ./cmd/schooldesk-server)
+          /tmp/shamm-server --data /tmp/shamm-data --addr 127.0.0.1:8741 --no-mdns &
+          for _ in $(seq 1 20); do
+            if curl -fsS http://127.0.0.1:8741/api/v1/health >/dev/null; then
+              break
+            fi
+            sleep 1
+          done
+          chrome="$(command -v google-chrome || command -v google-chrome-stable || true)"
+          if [ -z "$chrome" ]; then echo "chrome was not installed"; exit 1; fi
+          "$chrome" --headless --disable-gpu --no-sandbox --window-size=1200,900 --screenshot="$PWD/dist/screenshots/status.png" http://127.0.0.1:8741/ || true
+          if [ ! -s dist/screenshots/status.png ] && [ -s screenshot.png ]; then
+            mv screenshot.png dist/screenshots/status.png
+          fi
+          test -s dist/screenshots/status.png
+      - uses: actions/upload-artifact@v4
+        with:
+          name: screenshots
+          path: dist/screenshots/*.png
+          if-no-files-found: error
+
+  release-sms:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [server, android, windows-app, screenshots]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+          cache-dependency-path: server/go.sum
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: server-*
+          path: artifacts
+          merge-multiple: true
+      - uses: actions/download-artifact@v4
+        with:
+          name: pi-server
+          path: pi
+      - uses: actions/download-artifact@v4
+        with:
+          name: android-apk
+          path: apk
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows-server-installer
+          path: win-server
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows-client-installer
+          path: win-client
+      - uses: actions/download-artifact@v4
+        with:
+          name: update-key
+          path: keys
+      - uses: actions/download-artifact@v4
+        with:
+          name: screenshots
+          path: screenshots
+      - name: Sign a sample update and publish sms-v1
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p payload dist
+          find artifacts -name 'schooldesk-server-linux-amd64' -exec cp {} payload/server-linux-amd64 \;
+          find artifacts -name 'schooldesk-server-linux-arm64' -exec cp {} payload/server-linux-arm64 \;
+          find artifacts -name 'schooldesk-server-windows-amd64.exe' -exec cp {} payload/server-windows-amd64.exe \;
+          find apk -name 'app-release.apk' -exec cp {} payload/client.apk \;
+          find win-client -name 'ShammSchool-Client-Setup.exe' -exec cp {} payload/client-windows.exe \;
+          test -s payload/server-linux-amd64
+          test -s payload/server-linux-arm64
+          test -s payload/server-windows-amd64.exe
+          test -s payload/client.apk
+          test -s payload/client-windows.exe
+          (cd server && go run ./cmd/updatekey -key "$GITHUB_WORKSPACE/keys/update.priv" -dir "$GITHUB_WORKSPACE/payload" -version sms-v1 -schema 2 -out "$GITHUB_WORKSPACE/dist/shamm-update-sms-v1.smsu")
+          cp keys/update.pub dist/update.pub
+          find win-server -name 'ShammSchool-Server-Setup.exe' -exec cp {} dist/ \;
+          find win-client -name 'ShammSchool-Client-Setup.exe' -exec cp {} dist/ \;
+          find apk -name 'app-release.apk' -exec cp {} dist/ \;
+          find pi -name 'shamm-school-server_1.0.0_arm64.deb' -exec cp {} dist/ \;
+          find pi -name 'pi-setup.sh' -exec cp {} dist/ \;
+          find pi -name 'schooldesk-server-linux-arm64' -exec cp {} dist/ \;
+          files=(
+            dist/ShammSchool-Server-Setup.exe
+            dist/ShammSchool-Client-Setup.exe
+            dist/app-release.apk
+            dist/shamm-update-sms-v1.smsu
+            dist/update.pub
+          )
+          if [ -f dist/shamm-school-server_1.0.0_arm64.deb ]; then files+=(dist/shamm-school-server_1.0.0_arm64.deb); fi
+          if [ -f dist/pi-setup.sh ]; then files+=(dist/pi-setup.sh); fi
+          if [ -f dist/schooldesk-server-linux-arm64 ]; then files+=(dist/schooldesk-server-linux-arm64); fi
+          notes=$'Shamm School Management Systems.\n\nThe sample update is signed with the test key in update.pub. Make your own key before a real school uses updates. See docs/SETUP.md.'
+          if gh release view sms-v1 --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            gh release upload sms-v1 "${files[@]}" --repo "${{ github.repository }}" --clobber
+          else
+            gh release create sms-v1 "${files[@]}" --repo "${{ github.repository }}" --title "Shamm School Management Systems" --notes "$notes"
+          fi
+
   release-demo:
-    if: endsWith(github.repository, '/schooldesk-demo')
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && endsWith(github.repository, '/schooldesk-demo')
     needs: macos-demo
     runs-on: ubuntu-latest
     permissions:

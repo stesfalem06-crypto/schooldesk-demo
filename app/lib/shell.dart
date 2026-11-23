@@ -29,21 +29,55 @@ class DeskHost extends StatefulWidget {
 
 class DeskHostState extends State<DeskHost> {
   int index = 0;
+  int generation = 0;
+  final List<int> _hist = [0];
+  int _at = 0;
+
+  bool get canBack => _at > 0;
+  bool get canForward => _at < _hist.length - 1;
 
   void home() {
-    setState(() => index = 0);
+    go(0);
     final nav = Navigator.maybeOf(context);
     if (nav != null && nav.canPop()) nav.popUntil((route) => route.isFirst);
   }
 
   void go(int i) {
     final watch = Stopwatch()..start();
-    setState(() => index = i);
+    if (i == index) {
+      setState(() => generation++);
+      return;
+    }
+    setState(() {
+      if (_at < _hist.length - 1) _hist.removeRange(_at + 1, _hist.length);
+      _hist.add(i);
+      _at = _hist.length - 1;
+      index = i;
+      generation++;
+    });
     if (demoEdition) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         logStartup('page $i ${watch.elapsedMilliseconds} ms');
       });
     }
+  }
+
+  void back() {
+    if (!canBack) return;
+    setState(() {
+      _at--;
+      index = _hist[_at];
+      generation++;
+    });
+  }
+
+  void forward() {
+    if (!canForward) return;
+    setState(() {
+      _at++;
+      index = _hist[_at];
+      generation++;
+    });
   }
 
   @override
@@ -52,9 +86,12 @@ class DeskHostState extends State<DeskHost> {
     final items = widget.pages(model);
     final wide = MediaQuery.sizeOf(context).width >= 960;
     final safeIndex = index >= items.length + 1 ? 0 : index;
-    final page = safeIndex == 0 ? widget.home : items[safeIndex - 1].page;
+    final page = KeyedSubtree(
+      key: ValueKey('desk-$safeIndex-$generation'),
+      child: safeIndex == 0 ? widget.home : items[safeIndex - 1].page,
+    );
     if (demoEdition) {
-      return ErpShell(items: items, index: safeIndex, onSelect: go, child: page);
+      return ErpShell(items: items, index: safeIndex, generation: generation, onSelect: go, child: page);
     }
     if (wide) {
       return Scaffold(
@@ -153,19 +190,26 @@ class SchoolScaffold extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(16, 12, 8, 8),
               child: Row(
                 children: [
-                  if (canBack)
-                    IconButton(
-                      iconSize: 32,
-                      tooltip: 'Back',
-                      onPressed: () {
-                        if (nav != null && nav.canPop()) {
-                          nav.pop();
-                        } else {
-                          desk?.home();
-                        }
-                      },
-                      icon: const Icon(Icons.arrow_back),
-                    ),
+                  IconButton(
+                    iconSize: 32,
+                    tooltip: 'Back',
+                    onPressed: (canBack || (desk?.canBack ?? false))
+                        ? () {
+                            if (nav != null && nav.canPop()) {
+                              nav.pop();
+                            } else {
+                              desk?.back();
+                            }
+                          }
+                        : null,
+                    icon: const Icon(Icons.arrow_back),
+                  ),
+                  IconButton(
+                    iconSize: 32,
+                    tooltip: 'Forward',
+                    onPressed: (desk?.canForward ?? false) ? () => desk!.forward() : null,
+                    icon: const Icon(Icons.arrow_forward),
+                  ),
                   if (desk != null)
                     IconButton(
                       iconSize: 32,

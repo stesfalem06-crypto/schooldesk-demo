@@ -1,7 +1,8 @@
 package brand
 
 // Footer is printed on every screen and every generated document.
-const Footer = "Developed by 9 Multimedia and IT Solutions · SHAMM TESFALEM · 07162947"
+const Footer = "9 Multimedia and IT solutions · SHAMM TESFALEM · 07162947"
 
-const Product = "SchoolDesk"
+const Product = "Shamm School Management Systems"
+const Version = "sms-v1"
 const DefaultPort = 8741

@@ -917,6 +917,7 @@ func (a *API) sync(w http.ResponseWriter, r *http.Request) {
 			Score        *float64 `json:"score"`
 			BaseRevision int      `json:"base_revision"`
 		} `json:"scores"`
+		Attendance []store.Attendance `json:"attendance"`
 	}
 	if !a.read(w, r, &in) {
 		return
@@ -940,6 +941,25 @@ func (a *API) sync(w http.ResponseWriter, r *http.Request) {
 		}
 		if conflict {
 			conflicts = append(conflicts, map[string]any{"assessment_id": sc.AssessmentID, "student_id": sc.StudentID, "server": got})
+			continue
+		}
+		accepted = append(accepted, got.ID)
+	}
+	for _, row := range in.Attendance {
+		if row.SourceID == "" {
+			row.SourceID = in.DeviceID
+		}
+		if !u.SeesSchool() && !a.canHomeroom(u, row.ClassID) {
+			conflicts = append(conflicts, map[string]any{"student_id": row.StudentID, "date": row.Day, "error": "Only the homeroom teacher records attendance"})
+			continue
+		}
+		got, kept, err := a.Store.SaveAttendance(u.ID, row)
+		if err != nil {
+			conflicts = append(conflicts, map[string]any{"student_id": row.StudentID, "date": row.Day, "error": err.Error()})
+			continue
+		}
+		if kept {
+			conflicts = append(conflicts, map[string]any{"student_id": row.StudentID, "date": row.Day, "kept": true})
 			continue
 		}
 		accepted = append(accepted, got.ID)

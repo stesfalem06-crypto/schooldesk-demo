@@ -94,8 +94,8 @@ func Demo(s *store.Store) error {
 	}
 	type pupil struct {
 		name, sex, mother, father, class string
-		exam                              float64
-		full                              bool
+		exam                             float64
+		full                             bool
 	}
 	pupils := []pupil{
 		{"Abel Tesfay", "M", "Senait", "Tesfay", g8.ID, 40, true},
@@ -207,5 +207,5 @@ func Demo(s *store.Store) error {
 			return err
 		}
 	}
-	return nil
+	return SetSamplePINs(s)
 }

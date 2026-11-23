@@ -1,6 +1,8 @@
-# SchoolDesk
+# Shamm School Management Systems
 
-SchoolDesk is the offline school record for one school. It runs on the school network. It does not use the internet.
+Shamm School Management Systems is the offline school record for one school. It runs on the school network. It does not use the internet.
+
+The setup steps for a school are in [docs/SETUP.md](docs/SETUP.md).
 
 Each school has:
 

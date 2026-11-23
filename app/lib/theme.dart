@@ -11,7 +11,7 @@ const failRed = Color(0xFFC5363A);
 const card = Colors.white;
 const line = Color(0xFFE4DFD4);
 
-const footerText = 'Developed by 9 Multimedia and IT Solutions · SHAMM TESFALEM · 07162947';
+const footerText = '9 Multimedia and IT solutions · SHAMM TESFALEM · 07162947';
 
 const navy = Color(0xFF1E4A7A);
 const cream = Color(0xFFF3EEE4);

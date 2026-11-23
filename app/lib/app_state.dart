@@ -175,6 +175,32 @@ class AppModel extends ChangeNotifier {
     }
   }
 
+  Future<String?> signInPin(String userId, String pin) async {
+    try {
+      final data = await api!.post('/api/v1/auth/pin', {
+        'user_id': userId,
+        'pin': pin,
+        'device_id': _device,
+        'device_name': 'School phone',
+        'platform': defaultTargetPlatform.name,
+      }) as Map<String, dynamic>;
+      token = data['token']?.toString();
+      school = data['school_name']?.toString() ?? school;
+      final u = data['user'];
+      if (u is Map) user = u.map((k, v) => MapEntry(k.toString(), v));
+      await vault.write('token', token ?? '');
+      await vault.write('school', school);
+      await vault.writeJson('user', user);
+      licensed = true;
+      notifyListeners();
+      return null;
+    } on ApiException catch (e) {
+      if (e.locked) licensed = false;
+      notifyListeners();
+      return e.message;
+    }
+  }
+
   Future<String?> signIn(String username, String password) async {
     try {
       final data = await api!.post('/api/v1/auth/login', {

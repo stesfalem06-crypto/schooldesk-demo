@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:material_ui/material_ui.dart';
 import 'package:provider/provider.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
 import 'api.dart';
+import 'call_live.dart';
 import 'app_state.dart';
 import 'edition.dart';
 import 'grades.dart';
@@ -12,6 +15,7 @@ import 'roll_entry.dart';
 import 'money.dart';
 import 'timetable_page.dart';
 import 'office.dart';
+import 'shamm_ui.dart';
 import 'shell.dart';
 import 'theme.dart';
 import 'widgets.dart';
@@ -30,8 +34,8 @@ class _ConnectScreenState extends State<ConnectScreen> {
 
   Future<void> search() async {
     setState(() { looking = true; problem = null; });
-    final list = await SchoolApi.find();
-    setState(() { looking = false; found = list; if (list.isEmpty) problem = 'No school computer answered. Type its number.'; });
+    final list = {...await SchoolApi.find(), ...await SchoolApi.findUdp()}.toList();
+    setState(() { looking = false; found = list; if (list.isEmpty) problem = 'No school computer answered. Type its number, or scan the picture.'; });
   }
 
   @override
@@ -54,6 +58,15 @@ class _ConnectScreenState extends State<ConnectScreen> {
           TextField(controller: ip, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Or type the number, like 192.168.1.20')),
           const SizedBox(height: 8),
           FilledButton(onPressed: () => context.read<AppModel>().setBase(ip.text), child: const Text('Open')),
+          const SizedBox(height: 8),
+          FilledButton.icon(
+            onPressed: () async {
+              final code = await scanSchoolCode();
+              if (code != null && context.mounted) context.read<AppModel>().setBase(code);
+            },
+            icon: const Icon(Icons.qr_code_scanner),
+            label: const Text('Scan the picture'),
+          ),
         ],
       ),
     );
@@ -131,6 +144,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (!demoEdition) return const PinLogin();
     final model = context.watch<AppModel>();
     return SchoolScaffold(
       title: 'Sign in',
@@ -200,6 +214,7 @@ class _DemoRole extends StatelessWidget {
 }
 
 List<DeskItem> rolePages(AppModel model) {
+  const messages = DeskItem('Messages', Icons.forum, ChatScreen());
   if (model.seesSchool) {
     final items = <DeskItem>[
       const DeskItem('See fees', Icons.payments, FeesScreen()),
@@ -208,10 +223,12 @@ List<DeskItem> rolePages(AppModel model) {
       const DeskItem('Plan week', Icons.calendar_month, TimetableScreen()),
     ];
     if (model.isDirector) items.add(const DeskItem('Meetings', Icons.groups, MeetingsScreen()));
+    items.add(messages);
     return items;
   }
   if (model.isHomeroom) {
     return const [
+      messages,
       DeskItem('My class', Icons.groups, StudentsScreen()),
       DeskItem('Enter marks', Icons.edit, MarksScreen()),
       DeskItem('Take fees', Icons.payments, FeesScreen()),
@@ -220,6 +237,7 @@ List<DeskItem> rolePages(AppModel model) {
     ];
   }
   return const [
+    messages,
     DeskItem('Enter marks', Icons.edit, MarksScreen()),
     DeskItem('My week', Icons.calendar_month, TimetableScreen()),
   ];
@@ -233,11 +251,26 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   Map<String, dynamic>? dash;
+  Timer? _calls;
 
   @override
   void initState() {
     super.initState();
     load();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) offerUpdate(context, context.read<AppModel>());
+    });
+    if (!demoEdition) {
+      _calls = Timer.periodic(const Duration(seconds: 2), (_) {
+        if (mounted) watchIncoming(context);
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _calls?.cancel();
+    super.dispose();
   }
 
   Future<void> load() async {

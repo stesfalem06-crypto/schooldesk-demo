@@ -3,7 +3,7 @@ package report
 import "time"
 
 // Footer is drawn on every page and every slide.
-const Footer = "Developed by 9 Multimedia and IT Solutions · SHAMM TESFALEM · 07162947"
+const Footer = "9 Multimedia and IT solutions · SHAMM TESFALEM · 07162947"
 
 type Table struct {
 	Headers []string

@@ -6,13 +6,13 @@ import (
 )
 
 type MonthInput struct {
-	Year           int
-	Month          time.Month
-	SchoolDays     []time.Weekday
-	Periods        map[time.Weekday]int
-	Absent         []time.Time
-	MakeupClasses  int
-	MakeupPeriods  int
+	Year          int
+	Month         time.Month
+	SchoolDays    []time.Weekday
+	Periods       map[time.Weekday]int
+	Absent        []time.Time
+	MakeupClasses int
+	MakeupPeriods int
 }
 
 type MonthReport struct {

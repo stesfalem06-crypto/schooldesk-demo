@@ -13,6 +13,7 @@ import (
 	"github.com/skip2/go-qrcode"
 
 	"schooldesk/internal/auth"
+	"schooldesk/internal/brand"
 	"schooldesk/internal/buildinfo"
 	"schooldesk/internal/license"
 	"schooldesk/internal/store"
@@ -30,6 +31,11 @@ type API struct {
 
 	mu    sync.Mutex
 	fails map[string][]time.Time
+	calls *callHub
+
+	DataDir   string
+	Binary    string
+	OnRestart func()
 }
 
 func (a *API) now() time.Time {
@@ -52,9 +58,8 @@ func (a *API) Handler() http.Handler {
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
-		if r.URL.Path == "/" {
-			w.Header().Set("Content-Type", "text/html; charset=utf-8")
-			_, _ = w.Write(lockPage)
+		if r.URL.Path == "/" || r.URL.Path == "/status" {
+			a.home(w, r)
 			return
 		}
 		if !openPath(r.URL.Path) {
@@ -74,9 +79,13 @@ func (a *API) Handler() http.Handler {
 
 func openPath(p string) bool {
 	switch p {
-	case "/api/v1/health", "/api/v1/license", "/api/v1/license/activate", "/api/v1/license/qr.png":
+	case "/api/v1/health", "/api/v1/license", "/api/v1/license/activate", "/api/v1/license/qr.png",
+		"/api/v1/join.png", "/api/v1/client/info", "/api/v1/update", "/api/v1/update/rollback":
 		return true
 	default:
+		if strings.HasPrefix(p, "/api/v1/client/file/") {
+			return true
+		}
 		return false
 	}
 }
@@ -87,6 +96,25 @@ func (a *API) routes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/v1/license/activate", a.activate)
 	mux.HandleFunc("GET /api/v1/license/qr.png", a.qr)
 	mux.HandleFunc("POST /api/v1/auth/login", a.login)
+	mux.HandleFunc("GET /api/v1/auth/people", a.people)
+	mux.HandleFunc("POST /api/v1/auth/pin", a.pinLogin)
+	mux.HandleFunc("POST /api/v1/users/{id}/pin", a.setPIN)
+	mux.HandleFunc("GET /api/v1/chat/messages", a.listMessages)
+	mux.HandleFunc("POST /api/v1/chat/messages", a.postMessage)
+	mux.HandleFunc("POST /api/v1/calls/signal", a.postSignal)
+	mux.HandleFunc("GET /api/v1/calls/inbox", a.callInbox)
+	mux.HandleFunc("GET /api/v1/attendance", a.attendance)
+	mux.HandleFunc("POST /api/v1/attendance", a.saveAttendance)
+	mux.HandleFunc("POST /api/v1/attendance/numbers", a.markByNumbers)
+	mux.HandleFunc("GET /api/v1/plan", a.planView)
+	mux.HandleFunc("POST /api/v1/plan/solve", a.planSolve)
+	mux.HandleFunc("POST /api/v1/plan/move", a.planMove)
+	mux.HandleFunc("GET /api/v1/plan.pdf", a.planPDF)
+	mux.HandleFunc("GET /api/v1/join.png", a.joinQR)
+	mux.HandleFunc("POST /api/v1/update", a.uploadUpdate)
+	mux.HandleFunc("POST /api/v1/update/rollback", a.rollbackUpdate)
+	mux.HandleFunc("GET /api/v1/client/info", a.clientInfo)
+	mux.HandleFunc("GET /api/v1/client/file/{name}", a.clientFile)
 	mux.HandleFunc("POST /api/v1/auth/logout", a.logout)
 	mux.HandleFunc("GET /api/v1/auth/me", a.me)
 	mux.HandleFunc("POST /api/v1/auth/password", a.password)
@@ -284,7 +312,10 @@ func viewLicense(st license.Status) licenseView {
 
 func (a *API) health(w http.ResponseWriter, r *http.Request) {
 	st, _ := a.Gate.Current(a.now())
-	a.ok(w, map[string]any{"ok": true, "product": "SchoolDesk", "licensed": st.Licensed, "school_name": st.SchoolName, "demo": buildinfo.IsDemo()})
+	a.ok(w, map[string]any{
+		"ok": true, "product": brand.Product, "version": brand.Version,
+		"licensed": st.Licensed, "school_name": st.SchoolName, "demo": buildinfo.IsDemo(),
+	})
 }
 
 func (a *API) licenseStatus(w http.ResponseWriter, r *http.Request) {

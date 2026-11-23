@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -102,6 +103,35 @@ class SchoolApi {
       // Finding the school by name is optional. The number can be typed.
     } finally {
       client.stop();
+    }
+    return found.toList();
+  }
+
+  /// Asks on the school network. The server answers with its address. No internet is used.
+  static Future<List<String>> findUdp({Duration timeout = const Duration(seconds: 2)}) async {
+    final found = <String>{};
+    RawDatagramSocket socket;
+    try {
+      socket = await RawDatagramSocket.bind(InternetAddress.anyIPv4, 0);
+    } catch (_) {
+      return [];
+    }
+    socket.broadcastEnabled = true;
+    socket.send(utf8.encode('SHAMM?'), InternetAddress('255.255.255.255'), 8742);
+    final timer = Timer(timeout, socket.close);
+    try {
+      await for (final event in socket) {
+        if (event != RawSocketEvent.read) continue;
+        final dg = socket.receive();
+        if (dg == null) continue;
+        final match = RegExp(r'SHAMM/1\s+(\d+)').firstMatch(utf8.decode(dg.data, allowMalformed: true));
+        if (match != null) found.add('http://${dg.address.address}:${match.group(1)}');
+      }
+    } catch (_) {
+      // The school can still be opened by typing its number.
+    } finally {
+      timer.cancel();
+      socket.close();
     }
     return found.toList();
   }
