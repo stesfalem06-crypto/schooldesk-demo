@@ -147,38 +147,43 @@ class _Top extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.fromLTRB(20, 10, 12, 10),
         child: Column(children: [
-          Row(children: [
-          IconButton(
-            tooltip: 'Back',
-            onPressed: DeskHost.of(context)?.canBack == true ? () => DeskHost.of(context)!.back() : null,
-            icon: const Icon(Icons.arrow_back),
-          ),
-          IconButton(
-            tooltip: 'Forward',
-            onPressed: DeskHost.of(context)?.canForward == true ? () => DeskHost.of(context)!.forward() : null,
-            icon: const Icon(Icons.arrow_forward),
-          ),
-          Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(model.school.isEmpty ? 'Hope Academy' : model.school, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: ink)),
-              Text(who, style: const TextStyle(fontSize: 14, color: Color(0xFF5C6B7A))),
+          SizedBox(
+            height: 56,
+            child: Row(children: [
+              IconButton(
+                tooltip: 'Back',
+                onPressed: DeskHost.of(context)?.canBack == true ? () => DeskHost.of(context)!.back() : null,
+                icon: const Icon(Icons.arrow_back),
+              ),
+              IconButton(
+                tooltip: 'Forward',
+                onPressed: DeskHost.of(context)?.canForward == true ? () => DeskHost.of(context)!.forward() : null,
+                icon: const Icon(Icons.arrow_forward),
+              ),
+              Expanded(
+                child: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(model.school.isEmpty ? 'Hope Academy' : model.school, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: ink)),
+                  Text(who, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13, color: Color(0xFF5C6B7A))),
+                ]),
+              ),
+              Flexible(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 280),
+                  child: TextField(
+                    controller: search,
+                    decoration: const InputDecoration(hintText: 'Search students and staff', prefixIcon: Icon(Icons.search), isDense: true),
+                    onChanged: onSearch,
+                    onSubmitted: onSearch,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              TextButton(
+                onPressed: () => context.read<AppModel>().signOut(),
+                child: const Text('Switch role'),
+              ),
             ]),
           ),
-          SizedBox(
-            width: 280,
-            child: TextField(
-              controller: search,
-              decoration: const InputDecoration(hintText: 'Search students and staff', prefixIcon: Icon(Icons.search), isDense: true),
-              onChanged: onSearch,
-              onSubmitted: onSearch,
-            ),
-          ),
-          const SizedBox(width: 8),
-          TextButton(
-            onPressed: () => context.read<AppModel>().signOut(),
-            child: const Text('Switch role'),
-          ),
-        ]),
           if (hits.isNotEmpty)
             for (final hit in hits)
               ListTile(
